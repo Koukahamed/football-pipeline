@@ -2,7 +2,7 @@
 
 Pipeline de données automatisé qui publie chaque semaine un dashboard des stats football (EPL, Ligue 1, Bundesliga) sur GitHub Pages.
 
-**→ [Voir le dashboard live](https://ton-user.github.io/football-pipeline)**
+**→ [Voir le dashboard live](https://koukahamed.github.io/football-pipeline)**
 
 ## Ce que fait le pipeline
 
@@ -97,4 +97,5 @@ Tests automatisés à chaque run :
 ---
 
 **Auteur** : Hamed Savadogo — Data Engineer
+
 [LinkedIn](https://linkedin.com/in/ton-profil) · [GitHub](https://github.com/ton-user)
