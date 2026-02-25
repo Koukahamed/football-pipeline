@@ -1,0 +1,54 @@
+name: ⚽ Football Weekly Pipeline
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'   # Chaque lundi à 8h UTC (après les matchs du weekend)
+  workflow_dispatch:        # Déclenchement manuel possible
+
+permissions:
+  contents: write           # Nécessaire pour push sur gh-pages
+
+jobs:
+  run_pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests pandas duckdb dbt-duckdb jinja2
+
+      - name: Extract — Fetch API data (EPL, Ligue 1, Bundesliga)
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/fetch_data.py
+
+      - name: Load — Ingest into DuckDB
+        run: python ingestion/load_duckdb.py
+
+      - name: Transform — Run dbt models
+        run: |
+          cd dbt
+          dbt run --profiles-dir . --project-dir .
+
+      - name: Test — dbt data quality checks
+        run: |
+          cd dbt
+          dbt test --profiles-dir . --project-dir .
+
+      - name: Report — Generate HTML dashboard
+        run: python report/generate_report.py
+
+      - name: Deploy — Push to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./report/output
+          publish_branch: gh-pages
