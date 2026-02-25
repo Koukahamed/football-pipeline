@@ -507,7 +507,7 @@ def generate_html(standings, scorers, matches, week_stats):
         Données via <a href="https://football-data.org">football-data.org</a> ·
         Mis à jour automatiquement chaque lundi par GitHub Actions</p>
         <p style="margin-top:0.5rem">
-            <a href="https://github.com/ton-user/football-pipeline">📂 Voir le code source</a>
+            <a href="https://github.com/koukahamed/football-pipeline">📂 Voir le code source</a>
         </p>
     </footer>
 </body>
@@ -529,3 +529,4 @@ if __name__ == "__main__":
         fallback.write_text(f"<h1>Report generation failed: {e}</h1>")
     finally:
         con.close()
+
