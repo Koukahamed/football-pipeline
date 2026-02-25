@@ -1,7 +1,0 @@
-football_pipeline:
-  target: dev
-  outputs:
-    dev:
-      type: duckdb
-      path: ../data/football.duckdb
-      threads: 2
