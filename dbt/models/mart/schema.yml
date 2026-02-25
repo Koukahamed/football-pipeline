@@ -1,0 +1,10 @@
+version: 2
+
+models:
+  - name: mart_league_summary
+    description: "Top 5 classement + stats hebdo par ligue"
+    columns:
+      - name: position
+        tests: [not_null]
+      - name: points
+        tests: [not_null]
