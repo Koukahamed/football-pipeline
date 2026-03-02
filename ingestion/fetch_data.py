@@ -23,9 +23,10 @@ DATA_DIR = Path("data/raw")
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 LEAGUES = {
-    "EPL"        : "PL",
-    "LIGUE1"     : "FL1",
-    "BUNDESLIGA" : "BL1",
+    "EPL"        : "PL",    # Premier League
+    "LIGUE1"     : "FL1",   # Ligue 1
+    "BUNDESLIGA" : "BL1",   # Bundesliga
+    "LALIGA"     : "PD",    # La Liga ← ajouté
 }
 
 HEADERS = {"X-Auth-Token": API_KEY}
@@ -122,3 +123,4 @@ if __name__ == "__main__":
     }
     save(meta, "meta.json")
     print("\n✅ Extraction quotidienne terminée.")
+
