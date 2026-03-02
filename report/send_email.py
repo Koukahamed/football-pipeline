@@ -377,7 +377,7 @@ def build_email_html() -> str:
           {today_str}
         </p>
         <p style="margin:14px 0 0;display:inline-block;background:#1c1c2e;border:1px solid #2a2a3a;color:#7070a0;font-size:11px;padding:4px 14px;border-radius:20px;">
-          🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League &nbsp;·&nbsp; 🇫🇷 Ligue 1 &nbsp;·&nbsp; 🇩🇪 Bundesliga
+          🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League &nbsp;·&nbsp; 🇫🇷 Ligue 1 &nbsp;·&nbsp; 🇩🇪 Bundesliga &nbsp;·&nbsp; 🇪🇸 La Liga
         </p>
       </td>
     </tr>
