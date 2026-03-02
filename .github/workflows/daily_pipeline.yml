@@ -1,0 +1,63 @@
+name: ⚽ Football Daily Digest
+
+on:
+  schedule:
+    #  Tourne chaque matin à 8h UTC
+    #  → matchs du jour bien chargés, résultats d'hier disponibles
+    - cron: '0 8 * * *'
+  workflow_dispatch:          # Déclenchement manuel depuis GitHub UI
+    inputs:
+      preview_only:
+        description: "Preview uniquement (pas d'envoi email)"
+        required: false
+        default: 'false'
+
+permissions:
+  contents: read
+
+jobs:
+  daily_digest:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Setup ──────────────────────────────────────────────────────────────
+      - name: 📥 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install requests
+
+      # ── Extraction ─────────────────────────────────────────────────────────
+      - name: ⚡ Fetch data — matchs du jour + résultats d'hier
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/fetch_data.py
+
+      # ── Email ──────────────────────────────────────────────────────────────
+      - name: 📧 Generate & send daily digest email
+        env:
+          # SMTP (Gmail recommandé avec App Password)
+          SMTP_HOST:  ${{ secrets.SMTP_HOST }}
+          SMTP_PORT:  ${{ secrets.SMTP_PORT }}
+          SMTP_USER:  ${{ secrets.SMTP_USER }}
+          SMTP_PASS:  ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+          # Passer à "true" pour tester sans envoi
+          EMAIL_PREVIEW_ONLY: ${{ github.event.inputs.preview_only || 'false' }}
+        run: python report/send_email.py
+
+      # ── Upload preview en artifact (debug) ─────────────────────────────────
+      - name: 📎 Upload email preview as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-preview-${{ github.run_id }}
+          path: report/output/email_preview.html
+          retention-days: 7
