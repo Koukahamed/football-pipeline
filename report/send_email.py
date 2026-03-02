@@ -34,6 +34,7 @@ LEAGUE_META = {
     "epl"       : {"name": "Premier League", "flag": "🏴󠁧󠁢󠁥󠁮󠁧󠁿", "color": "#3d0c91", "light": "#6a3dd1"},
     "ligue1"    : {"name": "Ligue 1",         "flag": "🇫🇷",         "color": "#002395", "light": "#1a4fd6"},
     "bundesliga": {"name": "Bundesliga",       "flag": "🇩🇪",         "color": "#c8102e", "light": "#e84060"},
+    "laliga": {"name": "La Liga", "flag": "🇪🇸", "color": "#c8102e", "light": "#e05a20"},
 }
 
 
