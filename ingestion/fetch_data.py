@@ -1,13 +1,12 @@
 """
 fetch_data.py  —  Daily Edition
 ────────────────────────────────
-Récupère pour chaque ligue (EPL / Ligue 1 / Bundesliga) :
-  - Les matchs du jour (status: SCHEDULED / LIVE / TIMED)
-  - Les matchs d'hier terminés + leurs détails (buteurs, stats)
-  - Le classement courant
+Récupère pour chaque ligue :
+  - Matchs du jour
+  - Matchs d'hier + détails
+  - Classement
   - Top scoreurs
-
-API : football-data.org (plan gratuit, 10 req/min)
+  - Snapshot classement pour comparaison J-1
 """
 
 import os
@@ -19,14 +18,18 @@ from pathlib import Path
 
 API_KEY  = os.environ.get("FOOTBALL_API_KEY", "demo")
 BASE_URL = "https://api.football-data.org/v4"
-DATA_DIR = Path("data/raw")
+
+DATA_DIR    = Path("data/raw")
+HISTORY_DIR = Path("data/history")
+
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
 LEAGUES = {
-    "EPL"        : "PL",    # Premier League
-    "LIGUE1"     : "FL1",   # Ligue 1
-    "BUNDESLIGA" : "BL1",   # Bundesliga
-    "LALIGA"     : "PD",    # La Liga ← ajouté
+    "EPL": "PL",
+    "LIGUE1": "FL1",
+    "BUNDESLIGA": "BL1",
+    "LALIGA": "PD",
 }
 
 HEADERS = {"X-Auth-Token": API_KEY}
@@ -36,10 +39,10 @@ YESTERDAY = TODAY - timedelta(days=1)
 
 
 def get(endpoint: str) -> dict:
-    url  = f"{BASE_URL}/{endpoint}"
+    url = f"{BASE_URL}/{endpoint}"
     resp = requests.get(url, headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    time.sleep(7)   # respect rate limit gratuit
+    time.sleep(7)  # respect rate limit gratuit
     return resp.json()
 
 
@@ -49,63 +52,67 @@ def save(data: dict, filename: str):
     print(f"  ✅ Saved → {path}")
 
 
-# ── Matchs du jour ────────────────────────────────────────────────────────────
+def save_standings_snapshot(league_name: str, data: dict):
+    snapshot_file = HISTORY_DIR / f"standings_{league_name.lower()}_{TODAY}.json"
+    snapshot_file.write_text(json.dumps(data, ensure_ascii=False, indent=2))
+    print(f"  📸 Snapshot → {snapshot_file}")
 
-def fetch_today_matches(league_code: str, league_name: str):
-    print(f"📅 Matchs du jour {league_name} ({TODAY})...")
+
+# ── MATCHS DU JOUR ─────────────────────────────────────────
+
+def fetch_today_matches(code, name):
+    print(f"📅 Matchs du jour {name}")
+    data = get(f"competitions/{code}/matches?dateFrom={TODAY}&dateTo={TODAY}")
+    save(data, f"today_{name.lower()}.json")
+
+
+# ── MATCHS D'HIER ──────────────────────────────────────────
+
+def fetch_yesterday_matches(code, name):
+    print(f"🏆 Résultats d'hier {name}")
     data = get(
-        f"competitions/{league_code}/matches"
-        f"?dateFrom={TODAY}&dateTo={TODAY}"
+        f"competitions/{code}/matches?dateFrom={YESTERDAY}&dateTo={YESTERDAY}&status=FINISHED"
     )
-    save(data, f"today_{league_name.lower()}.json")
+    save(data, f"yesterday_{name.lower()}.json")
 
-
-# ── Matchs d'hier (terminés) ──────────────────────────────────────────────────
-
-def fetch_yesterday_matches(league_code: str, league_name: str):
-    print(f"🏆 Résultats d'hier {league_name} ({YESTERDAY})...")
-    data = get(
-        f"competitions/{league_code}/matches"
-        f"?dateFrom={YESTERDAY}&dateTo={YESTERDAY}&status=FINISHED"
-    )
-    save(data, f"yesterday_{league_name.lower()}.json")
-
-    # Pour chaque match terminé, récupérer les détails (buteurs, stats)
     matches = data.get("matches", [])
     details = []
+
     for m in matches:
         match_id = m.get("id")
         if not match_id:
             continue
-        print(f"    🔍 Détails match {match_id}...")
         try:
             detail = get(f"matches/{match_id}")
             details.append(detail)
-        except requests.HTTPError as e:
-            print(f"    ⚠️  Erreur détails match {match_id}: {e}")
-    save({"matches_details": details}, f"yesterday_details_{league_name.lower()}.json")
+        except requests.HTTPError:
+            pass
+
+    save({"matches_details": details}, f"yesterday_details_{name.lower()}.json")
 
 
-# ── Classement ────────────────────────────────────────────────────────────────
+# ── CLASSEMENT ─────────────────────────────────────────────
 
-def fetch_standings(league_code: str, league_name: str):
-    print(f"📊 Classement {league_name}...")
-    data = get(f"competitions/{league_code}/standings")
-    save(data, f"standings_{league_name.lower()}.json")
-
-
-# ── Top scoreurs ──────────────────────────────────────────────────────────────
-
-def fetch_scorers(league_code: str, league_name: str):
-    print(f"⚽ Scoreurs {league_name}...")
-    data = get(f"competitions/{league_code}/scorers?limit=10")
-    save(data, f"scorers_{league_name.lower()}.json")
+def fetch_standings(code, name):
+    print(f"📊 Classement {name}")
+    data = get(f"competitions/{code}/standings")
+    save(data, f"standings_{name.lower()}.json")
+    save_standings_snapshot(name, data)
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# ── SCOREURS ───────────────────────────────────────────────
+
+def fetch_scorers(code, name):
+    print(f"⚽ Scoreurs {name}")
+    data = get(f"competitions/{code}/scorers?limit=10")
+    save(data, f"scorers_{name.lower()}.json")
+
+
+# ── MAIN ───────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print(f"🚀 Daily fetch — {TODAY}\n")
+    print(f"🚀 Daily Fetch — {TODAY}\n")
+
     for name, code in LEAGUES.items():
         try:
             fetch_today_matches(code, name)
@@ -113,7 +120,7 @@ if __name__ == "__main__":
             fetch_standings(code, name)
             fetch_scorers(code, name)
         except requests.HTTPError as e:
-            print(f"  ⚠️  Erreur pour {name}: {e}")
+            print(f"⚠️ Erreur {name}: {e}")
 
     meta = {
         "extracted_at": datetime.now(timezone.utc).isoformat(),
@@ -121,6 +128,7 @@ if __name__ == "__main__":
         "yesterday": str(YESTERDAY),
         "leagues": list(LEAGUES.keys()),
     }
-    save(meta, "meta.json")
-    print("\n✅ Extraction quotidienne terminée.")
 
+    save(meta, "meta.json")
+
+    print("\n✅ Extraction terminée.")
