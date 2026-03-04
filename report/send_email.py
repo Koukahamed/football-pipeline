@@ -4,7 +4,7 @@ send_email.py  —  Football Daily Premium
 Envoie un email HTML avec :
 
 📅 Matchs du jour
-🏆 Récap d’hier (buteurs + stats)
+🏆 Récap d'hier (buteurs + stats)
 ⚽ Top scoreurs
 📊 Classement premium (avec mouvement J-1)
 
@@ -86,17 +86,38 @@ def parse_yesterday_results(league: str) -> list:
     data = load_json(f"yesterday_{league}.json")
     matches = data.get("matches", [])
 
+    # Charger les détails pour récupérer les buteurs
+    details_data = load_json(f"yesterday_details_{league}.json")
+    details_by_id = {}
+    for d in details_data.get("matches_details", []):
+        match = d.get("match", d)  # certaines API wrappent dans "match"
+        mid = match.get("id")
+        if mid:
+            details_by_id[mid] = match
+
     result = []
 
     for m in matches:
         score = m.get("score", {}).get("fullTime", {})
+        match_id = m.get("id")
+
+        # Extraire les buteurs depuis les détails
+        scorers = []
+        detail = details_by_id.get(match_id, {})
+        for goal in detail.get("goals", []):
+            scorer_name = goal.get("scorer", {}).get("name")
+            minute = goal.get("minute")
+            team = goal.get("team", {}).get("shortName") or goal.get("team", {}).get("name")
+            if scorer_name:
+                scorers.append({"name": scorer_name, "minute": minute, "team": team})
 
         result.append({
-            "id": m.get("id"),
+            "id": match_id,
             "home": m.get("homeTeam", {}).get("name"),
             "away": m.get("awayTeam", {}).get("name"),
             "home_score": score.get("home"),
             "away_score": score.get("away"),
+            "scorers": scorers,
         })
 
     return result
@@ -162,6 +183,93 @@ def parse_standings(league: str, limit: int = 10) -> list:
 
     return result
 
+
+# ── SECTIONS HTML ──────────────────────────────────────────
+
+def html_today_matches_section(league: str, meta: dict) -> str:
+    matches = parse_today_matches(league)
+
+    if not matches:
+        return ""
+
+    rows = ""
+    for m in matches:
+        rows += f"""
+        <tr>
+            <td style="padding:6px 10px;">{m["time"]}</td>
+            <td style="padding:6px 10px;font-weight:bold;">{m["home"]}</td>
+            <td style="padding:6px 10px;text-align:center;">vs</td>
+            <td style="padding:6px 10px;font-weight:bold;">{m["away"]}</td>
+        </tr>
+        """
+
+    return f"""
+    <h3>{meta["flag"]} {meta["name"]}</h3>
+    <table width="100%" style="border-collapse:collapse;">
+        {rows}
+    </table>
+    """
+
+
+def html_yesterday_results_section(league: str, meta: dict) -> str:
+    results = parse_yesterday_results(league)
+
+    if not results:
+        return ""
+
+    rows = ""
+    for m in results:
+        score_str = f"{m['home_score']} - {m['away_score']}" if m['home_score'] is not None else "- - -"
+
+        scorers_str = ""
+        if m["scorers"]:
+            goals = ", ".join(
+                f"{s['name']} {s['minute']}'" for s in m["scorers"]
+            )
+            scorers_str = f"<br><small style='color:#aaa;'>⚽ {goals}</small>"
+
+        rows += f"""
+        <tr>
+            <td style="padding:6px 10px;font-weight:bold;">{m["home"]}</td>
+            <td style="padding:6px 10px;text-align:center;font-weight:bold;font-size:1.1em;">{score_str}</td>
+            <td style="padding:6px 10px;font-weight:bold;">{m["away"]}</td>
+            <td style="padding:6px 10px;">{scorers_str}</td>
+        </tr>
+        """
+
+    return f"""
+    <h3>{meta["flag"]} {meta["name"]}</h3>
+    <table width="100%" style="border-collapse:collapse;">
+        {rows}
+    </table>
+    """
+
+
+def html_top_scorers_section(league: str, meta: dict) -> str:
+    scorers = parse_top_scorers(league)
+
+    if not scorers:
+        return ""
+
+    rows = ""
+    for i, s in enumerate(scorers, 1):
+        rows += f"""
+        <tr>
+            <td style="padding:4px 10px;">{i}</td>
+            <td style="padding:4px 10px;font-weight:bold;">{s["name"]}</td>
+            <td style="padding:4px 10px;color:#aaa;">{s["team"]}</td>
+            <td style="padding:4px 10px;text-align:center;">⚽ {s["goals"]}</td>
+        </tr>
+        """
+
+    return f"""
+    <h3>{meta["flag"]} {meta["name"]}</h3>
+    <table width="100%" style="border-collapse:collapse;">
+        {rows}
+    </table>
+    """
+
+
 def html_standings_section(league: str, meta: dict) -> str:
     standings = parse_standings(league)
 
@@ -172,7 +280,6 @@ def html_standings_section(league: str, meta: dict) -> str:
 
     for team in standings:
 
-        # Leader
         if team["position"] == 1:
             bg = "background:#0f2f1f;"
             badge = "🔥 LEADER"
@@ -183,53 +290,67 @@ def html_standings_section(league: str, meta: dict) -> str:
             bg = ""
             badge = ""
 
-        # Movement
         arrow = ""
         if team["movement"] == "up":
-            arrow = "▲"
+            arrow = "<span style='color:#4caf50;'>▲</span>"
         elif team["movement"] == "down":
-            arrow = "▼"
+            arrow = "<span style='color:#f44336;'>▼</span>"
         elif team["movement"] == "same":
-            arrow = "•"
+            arrow = "<span style='color:#aaa;'>•</span>"
 
         rows += f"""
         <tr style="{bg}">
-            <td>{team["position"]} {arrow}</td>
-            <td>{team["team"]} {badge}</td>
-            <td>{team["points"]} pts</td>
-            <td>{team["diff"]}</td>
+            <td style="padding:4px 10px;">{team["position"]} {arrow}</td>
+            <td style="padding:4px 10px;">{team["team"]} {badge}</td>
+            <td style="padding:4px 10px;text-align:center;">{team["points"]} pts</td>
+            <td style="padding:4px 10px;text-align:center;">{team["diff"]}</td>
         </tr>
         """
 
     return f"""
     <h3>{meta["flag"]} {meta["name"]}</h3>
-    <table width="100%">
+    <table width="100%" style="border-collapse:collapse;">
         {rows}
     </table>
     """
 
+
 def build_email_html():
 
-    standings_html = ""
+    today_html      = ""
+    yesterday_html  = ""
+    scorers_html    = ""
+    standings_html  = ""
+
     for league, meta in LEAGUE_META.items():
+        today_html     += html_today_matches_section(league, meta)
+        yesterday_html += html_yesterday_results_section(league, meta)
+        scorers_html   += html_top_scorers_section(league, meta)
         standings_html += html_standings_section(league, meta)
 
     return f"""
     <html>
-    <body style="background:#0d0d1a;color:white;font-family:Arial;">
-        <h1>⚽ Football Daily — {TODAY}</h1>
+    <body style="background:#0d0d1a;color:white;font-family:Arial;max-width:700px;margin:0 auto;padding:20px;">
+        <h1 style="text-align:center;">⚽ Football Daily — {TODAY}</h1>
+
+        <h2>📅 Matchs du jour</h2>
+        {today_html if today_html else "<p style='color:#aaa;'>Aucun match aujourd'hui.</p>"}
+
+        <h2>🏆 Récap d'hier</h2>
+        {yesterday_html if yesterday_html else "<p style='color:#aaa;'>Aucun résultat hier.</p>"}
+
+        <h2>⚽ Top Scoreurs</h2>
+        {scorers_html if scorers_html else "<p style='color:#aaa;'>Données indisponibles.</p>"}
 
         <h2>📊 Classement</h2>
-        {standings_html}
+        {standings_html if standings_html else "<p style='color:#aaa;'>Données indisponibles.</p>"}
 
     </body>
     </html>
     """
 
 
-
-  def send_email(html_content: str):
-
+def send_email(html_content: str):
     smtp_host = os.environ.get("SMTP_HOST")
     smtp_port = int(os.environ.get("SMTP_PORT", 587))
     smtp_user = os.environ.get("SMTP_USER")
@@ -261,4 +382,3 @@ if __name__ == "__main__":
         print("✅ Email envoyé")
     except Exception as e:
         print(f"❌ Erreur : {e}")
-
