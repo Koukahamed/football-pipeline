@@ -51,7 +51,9 @@ jobs:
           EMAIL_TO:   ${{ secrets.EMAIL_TO }}
           # Passer à "true" pour tester sans envoi
           EMAIL_PREVIEW_ONLY: ${{ github.event.inputs.preview_only || 'false' }}
-        run: python report/send_email.py
+        run: |
+          mkdir -p report/output
+          python report/send_email.py
 
       # ── Upload preview en artifact (debug) ─────────────────────────────────
       - name: 📎 Upload email preview as artifact
@@ -60,5 +62,5 @@ jobs:
         with:
           name: email-preview-${{ github.run_id }}
           path: report/output/email_preview.html
-          if-no-files-found: warn
           retention-days: 7
+          if-no-files-found: warn
