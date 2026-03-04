@@ -422,7 +422,7 @@ def html_standings_section_all() -> str:
 
 def build_email_html() -> str:
 
-    today_label = today_label_str = today_label()
+    today_label_str = today_label()
 
     return f"""<!DOCTYPE html>
 <html lang="fr">
