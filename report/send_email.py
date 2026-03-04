@@ -585,20 +585,7 @@ def send_email(html_content: str):
 
 if __name__ == "__main__":
     html = build_email_html()
-
-    # Preview locale — chemin aligné avec le workflow GitHub Actions
-    preview = Path("report/output/email_preview.html")
-    preview.parent.mkdir(parents=True, exist_ok=True)
-    preview.write_text(html)
-    print(f"👁  Preview → {preview}")
-
-    # Respect du flag EMAIL_PREVIEW_ONLY injecté par le workflow
-    preview_only = os.environ.get("EMAIL_PREVIEW_ONLY", "false").lower() == "true"
-
-    if preview_only:
-        print("ℹ️  Mode preview uniquement — email non envoyé.")
-    else:
-        try:
-            send_email(html)
-        except Exception as e:
-            print(f"❌ Erreur envoi : {e}")
+    try:
+        send_email(html)
+    except Exception as e:
+        print(f"❌ Erreur envoi : {e}")
