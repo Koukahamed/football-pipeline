@@ -459,7 +459,7 @@ def build_email_html() -> str:
       </div>
 
       <div style="font-size:13px;color:#444;margin-top:16px;letter-spacing:1px;">
-        {today_label_str.upper()} &nbsp;·&nbsp; 4 LIGUES &nbsp;·&nbsp; ÉDITION PREMIUM
+        {_str.upper()} &nbsp;·&nbsp; 4 LIGUES &nbsp;·&nbsp; ÉDITION PREMIUM
       </div>
 
       <!-- Divider line -->
@@ -495,7 +495,7 @@ def build_email_html() -> str:
 
       <!-- ─ MATCHS DU JOUR ─ -->
       <div style="margin-bottom:48px;">
-        {section_header("Matchs du Jour", f"Programme · {today_label_str}")}
+        {section_header("Matchs du Jour", f"Programme · {_str}")}
         {html_today_section_all()}
       </div>
 
@@ -569,7 +569,7 @@ def send_email(html_content: str):
     to_addrs  = os.environ.get("EMAIL_TO", smtp_user).split(",")
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"⚽ Football Daily — {today_label()}"
+    msg["Subject"] = f"⚽ Football Daily — {()}"
     msg["From"]    = from_addr
     msg["To"]      = ", ".join(to_addrs)
 
