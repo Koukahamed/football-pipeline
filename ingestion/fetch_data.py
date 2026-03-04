@@ -3,7 +3,7 @@ fetch_data.py  —  Daily Edition
 ────────────────────────────────
 Récupère pour chaque ligue :
   - Matchs du jour
-  - Matchs d'hier + détails
+  - Matchs d'hier + détails (buteurs)
   - Classement
   - Top scoreurs
   - Snapshot classement pour comparaison J-1
@@ -26,10 +26,10 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
 LEAGUES = {
-    "EPL": "PL",
-    "LIGUE1": "FL1",
-    "BUNDESLIGA": "BL1",
-    "LALIGA": "PD",
+    "epl": "PL",
+    "ligue1": "FL1",
+    "bundesliga": "BL1",
+    "laliga": "PD",
 }
 
 HEADERS = {"X-Auth-Token": API_KEY}
@@ -53,7 +53,7 @@ def save(data: dict, filename: str):
 
 
 def save_standings_snapshot(league_name: str, data: dict):
-    snapshot_file = HISTORY_DIR / f"standings_{league_name.lower()}_{TODAY}.json"
+    snapshot_file = HISTORY_DIR / f"standings_{league_name}_{TODAY}.json"
     snapshot_file.write_text(json.dumps(data, ensure_ascii=False, indent=2))
     print(f"  📸 Snapshot → {snapshot_file}")
 
@@ -63,7 +63,7 @@ def save_standings_snapshot(league_name: str, data: dict):
 def fetch_today_matches(code, name):
     print(f"📅 Matchs du jour {name}")
     data = get(f"competitions/{code}/matches?dateFrom={TODAY}&dateTo={TODAY}")
-    save(data, f"today_{name.lower()}.json")
+    save(data, f"today_{name}.json")
 
 
 # ── MATCHS D'HIER ──────────────────────────────────────────
@@ -73,7 +73,7 @@ def fetch_yesterday_matches(code, name):
     data = get(
         f"competitions/{code}/matches?dateFrom={YESTERDAY}&dateTo={YESTERDAY}&status=FINISHED"
     )
-    save(data, f"yesterday_{name.lower()}.json")
+    save(data, f"yesterday_{name}.json")
 
     matches = data.get("matches", [])
     details = []
@@ -85,10 +85,11 @@ def fetch_yesterday_matches(code, name):
         try:
             detail = get(f"matches/{match_id}")
             details.append(detail)
-        except requests.HTTPError:
-            pass
+            print(f"  ⚽ Détails match {match_id} OK")
+        except requests.HTTPError as e:
+            print(f"  ⚠️ Détails match {match_id} ignorés : {e}")
 
-    save({"matches_details": details}, f"yesterday_details_{name.lower()}.json")
+    save({"matches_details": details}, f"yesterday_details_{name}.json")
 
 
 # ── CLASSEMENT ─────────────────────────────────────────────
@@ -96,7 +97,7 @@ def fetch_yesterday_matches(code, name):
 def fetch_standings(code, name):
     print(f"📊 Classement {name}")
     data = get(f"competitions/{code}/standings")
-    save(data, f"standings_{name.lower()}.json")
+    save(data, f"standings_{name}.json")
     save_standings_snapshot(name, data)
 
 
@@ -105,7 +106,7 @@ def fetch_standings(code, name):
 def fetch_scorers(code, name):
     print(f"⚽ Scoreurs {name}")
     data = get(f"competitions/{code}/scorers?limit=10")
-    save(data, f"scorers_{name.lower()}.json")
+    save(data, f"scorers_{name}.json")
 
 
 # ── MAIN ───────────────────────────────────────────────────
