@@ -60,4 +60,5 @@ jobs:
         with:
           name: email-preview-${{ github.run_id }}
           path: report/output/email_preview.html
+          if-no-files-found: warn
           retention-days: 7
