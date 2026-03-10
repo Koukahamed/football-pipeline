@@ -19,6 +19,9 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+
+PARIS_TZ = ZoneInfo("Europe/Paris")
 
 DATA_DIR    = Path("data/raw")
 HISTORY_DIR = Path("data/history")
@@ -87,7 +90,8 @@ def parse_today_matches(league: str) -> list:
         utc_dt = m.get("utcDate", "")
         try:
             dt = datetime.fromisoformat(utc_dt.replace("Z", "+00:00"))
-            time_str = dt.strftime("%H:%M")
+            dt_paris = dt.astimezone(PARIS_TZ)
+            time_str = dt_paris.strftime("%H:%M")
         except Exception:
             time_str = "TBD"
         result.append({
