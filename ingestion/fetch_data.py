@@ -30,6 +30,7 @@ LEAGUES = {
     "ligue1": "FL1",
     "bundesliga": "BL1",
     "laliga": "PD",
+    "ucl": "CL",
 }
 
 HEADERS = {"X-Auth-Token": API_KEY}
@@ -133,3 +134,4 @@ if __name__ == "__main__":
     save(meta, "meta.json")
 
     print("\n✅ Extraction terminée.")
+
