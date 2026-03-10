@@ -63,6 +63,13 @@ LEAGUE_META = {
         "accent": "#E65100",
         "gradient": "linear-gradient(135deg, #1a0800 0%, #6e2000 100%)",
     },
+    "ucl": {
+        "name": "Champions League",
+        "flag": "🏆",
+        "country": "Europe",
+        "accent": "#F5C518",
+        "gradient": "linear-gradient(135deg, #0a0a00 0%, #2a2000 100%)",
+    },
 }
 
 # ── DATA LOADING ───────────────────────────────────────────
