@@ -2,7 +2,7 @@ name: ⚽ Football Daily Digest
 
 on:
   schedule:
-    #  Tourne chaque matin à 8h UTC
+    #  Tourne chaque matin à 9h heure de Paris (07:00 UTC en CEST)
     #  → matchs du jour bien chargés, résultats d'hier disponibles
     - cron: '0 7 * * *'
   workflow_dispatch:   # Déclenchement manuel depuis GitHub UI

@@ -1,6 +1,6 @@
 # ⚽ Football Daily Digest
 
-Pipeline automatisé qui tourne **chaque matin à 8h UTC** et envoie un **email HTML** récapitulatif avec :
+Pipeline automatisé qui tourne **chaque matin à 9h (heure de Paris)** et envoie un **email HTML** récapitulatif avec :
 
 - 📅 **Matchs du jour** — coup d'envoi heure UTC, par ligue
 - 🏆 **Récap d'hier** — scores
@@ -47,7 +47,7 @@ Dans **Settings → Secrets and variables → Actions**, ajouter :
 
 ## 🚀 Lancement
 
-**Automatique :** tous les matins à 8h UTC via GitHub Actions.
+**Automatique :** tous les matins à 9h (heure de Paris, soit 7h UTC en heure d'été) via GitHub Actions.
 
 **Manuel :** dans l'onglet **Actions** → `⚽ Football Daily Digest` → **Run workflow**.
 Options :
