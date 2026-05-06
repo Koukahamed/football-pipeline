@@ -47,7 +47,7 @@ Dans **Settings → Secrets and variables → Actions**, ajouter :
 
 ## 🚀 Lancement
 
-**Automatique :** tous les matins à 9h (heure de Paris, soit 7h UTC en heure d'été) via GitHub Actions.
+**Automatique :** tous les matins à 9h (heure de Paris) via GitHub Actions, avec gestion CET/CEST.
 
 **Manuel :** dans l'onglet **Actions** → `⚽ Football Daily Digest` → **Run workflow**.
 Options :

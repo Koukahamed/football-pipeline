@@ -2,9 +2,10 @@ name: ⚽ Football Daily Digest
 
 on:
   schedule:
-    #  Tourne chaque matin à 9h heure de Paris (07:00 UTC en CEST)
-    #  → matchs du jour bien chargés, résultats d'hier disponibles
+    #  Déclenchement à 07:00 & 08:00 UTC, puis garde-fou pour n'exécuter
+    #  le pipeline qu'à 09:00 heure de Paris (gère automatiquement CET/CEST).
     - cron: '0 7 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:   # Déclenchement manuel depuis GitHub UI
 
 permissions:
@@ -15,26 +16,44 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: 🕘 Gate — run only at 09:00 Europe/Paris
+        id: paris_gate
+        shell: bash
+        run: |
+          PARIS_HOUR="$(TZ=Europe/Paris date +%H)"
+          if [ "$PARIS_HOUR" = "09" ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "✅ It is 09:00 in Paris, continuing."
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "⏭️ Not 09:00 in Paris (current Paris hour: $PARIS_HOUR), skipping."
+          fi
+
       # ── Setup ──────────────────────────────────────────────────────────────
       - name: 📥 Checkout repo
+        if: steps.paris_gate.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: 🐍 Setup Python 3.11
+        if: steps.paris_gate.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
       - name: 📦 Install dependencies
+        if: steps.paris_gate.outputs.should_run == 'true'
         run: pip install requests
 
       # ── Extraction ─────────────────────────────────────────────────────────
       - name: ⚡ Fetch data — matchs du jour + résultats d'hier
+        if: steps.paris_gate.outputs.should_run == 'true'
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python ingestion/fetch_data.py
 
       # ── Email ──────────────────────────────────────────────────────────────
       - name: 📧 Generate & send daily digest email
+        if: steps.paris_gate.outputs.should_run == 'true'
         env:
           SMTP_HOST:  ${{ secrets.SMTP_HOST }}
           SMTP_PORT:  ${{ secrets.SMTP_PORT }}
