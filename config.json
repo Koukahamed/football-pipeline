@@ -1,0 +1,6 @@
+{
+  "timezone": "Europe/Paris",
+  "dashboard_url": "https://koukahamed.github.io/football-pipeline/",
+  "favorite_team_ids": [],
+  "leagues": {"epl": {"code": "PL", "name": "Premier League"}, "ligue1": {"code": "FL1", "name": "Ligue 1"}, "bundesliga": {"code": "BL1", "name": "Bundesliga"}, "laliga": {"code": "PD", "name": "La Liga"}, "ucl": {"code": "CL", "name": "Champions League"}}
+}
