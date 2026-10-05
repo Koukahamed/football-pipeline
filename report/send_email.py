@@ -22,14 +22,14 @@ def main():
     if any(not os.environ.get(key) for key in required):
         raise SystemExit('Missing required SMTP configuration')
     recipients = [value.strip() for value in os.environ['EMAIL_TO'].split(',') if value.strip()]
-    sender = os.environ.get('EMAIL_FROM', os.environ['SMTP_USER'])
+    sender = os.environ.get('EMAIL_FROM') or os.environ['SMTP_USER']
     msg = EmailMessage()
     msg['Subject'] = f"⚽ Football Daily — {data['today']} : résultats et matchs du jour"
     msg['From'] = sender
     msg['To'] = ', '.join(recipients)
     msg.set_content(plain)
     msg.add_alternative(html, subtype='html')
-    with smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ.get('SMTP_PORT', '587')), timeout=30) as server:
+    with smtplib.SMTP(os.environ['SMTP_HOST'], int(os.environ.get('SMTP_PORT') or '587'), timeout=30) as server:
         server.starttls()
         server.login(os.environ['SMTP_USER'], os.environ['SMTP_PASS'])
         server.send_message(msg, from_addr=parseaddr(sender)[1], to_addrs=recipients)

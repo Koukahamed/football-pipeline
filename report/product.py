@@ -74,7 +74,7 @@ def email_content(data):
         for league in data['leagues'].values():
             matches = [m for m in league['matches'] if str(match_date(m).date()) == date]
             if matches:
-                parts.append(f"<h3>{escape(league['name'])}</h3>")
+                parts.append(f"<h3>{escape(league['name'])}</h3><p style='font-size:12px;color:#64748b'>Récupération : {escape(league.get('freshness', {}).get('matches') or 'indisponible')}</p>")
             for match in sorted(matches, key=lambda m: m['utcDate']):
                 label = match_label(match)
                 parts.append(f'<p style="padding:10px;background:#f1f5f9;border-radius:8px">{escape(label)}</p>')
