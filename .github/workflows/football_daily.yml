@@ -7,7 +7,7 @@ on:
       - 'ingestion/**'
       - 'report/**'
       - 'requirements.txt'
-      - '.github/workflows/daily_pipeline.yml'
+      - '.github/workflows/football_daily.yml'
   schedule:
     - cron: '0 7 * * *'
     - cron: '0 8 * * *'
