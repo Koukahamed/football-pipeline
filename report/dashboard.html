@@ -11,6 +11,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const stamp=s=>s?new Date(s).toLocaleString('fr-FR',{timeZone:'Europe/Paris'}):'indisponible';
 const name=t=>t.shortName||t.name||'Équipe';
 const date=m=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(m.utcDate));const v=k=>p.find(x=>x.type===k).value;return `${v('year')}-${v('month')}-${v('day')}`;};
+const addDays=(d,n)=>{const x=new Date(d+'T12:00:00Z');x.setUTCDate(x.getUTCDate()+n);return x.toISOString().slice(0,10);};
 const time=m=>new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit'}).format(new Date(m.utcDate));
 const statuses={FINISHED:'Terminé',TIMED:'Programmé',SCHEDULED:'Programmé',IN_PLAY:'En cours',PAUSED:'Mi-temps',POSTPONED:'Reporté',CANCELLED:'Annulé',SUSPENDED:'Suspendu',AWARDED:'Attribué'};
 function star(t){return `<button class="star ${favorites.has(t.id)?'chosen':''}" data-team="${Number(t.id)}" aria-label="Favori ${esc(name(t))}" aria-pressed="${favorites.has(t.id)}">★</button>`;}
@@ -27,7 +28,7 @@ function render(){
    html+='</tbody></table></div>';if(!(view==='Classements'?l.table:l.scorers).length)html+='<p>Données indisponibles pour cette compétition.</p>';
   }
  }else{
-  const matches=leagues.flatMap(l=>l.matches.map(m=>({m,l}))).filter(({m})=>view==='Aujourd’hui'?date(m)===data.today:view==='Résultats'?date(m)===$('date').value:view==='Calendrier'?date(m)>=data.today:(favorites.has(m.homeTeam.id)||favorites.has(m.awayTeam.id))).sort((a,b)=>a.m.utcDate.localeCompare(b.m.utcDate));
+  const matches=leagues.flatMap(l=>l.matches.map(m=>({m,l}))).filter(({m})=>view==='Aujourd’hui'?date(m)===data.today:view==='Résultats'?date(m)===$('date').value:view==='Calendrier'?(date(m)>=data.today&&date(m)<addDays(data.today,7)):(favorites.has(m.homeTeam.id)||favorites.has(m.awayTeam.id))).sort((a,b)=>a.m.utcDate.localeCompare(b.m.utcDate));
   html='<div class="grid">'+matches.map(({m,l})=>card(m,l)).join('')+'</div>';
   if(!matches.length)html='<p class="card">'+(view==='Mes équipes'&&!favorites.size?'Choisis tes équipes avec les étoiles.':'Aucun match disponible pour cette sélection. Vérifie aussi les dates de récupération.')+'</p>';
  }
