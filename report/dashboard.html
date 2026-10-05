@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Football Daily</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#e7eee9;background:#0c1714;color-scheme:dark}*{box-sizing:border-box}body{margin:0}header,main{max-width:1180px;margin:auto;padding:28px}header{border-bottom:1px solid #30433a}h1{font-size:clamp(32px,6vw,60px);margin:10px 0;letter-spacing:-2px}h2{font-size:24px}h3{font-size:17px;color:#a8c8b6}small,.muted{color:#aabcb2}.eyebrow{color:#81d7a5;letter-spacing:3px;font-size:12px}nav{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0}button,select,input{font:inherit;padding:10px 14px;border-radius:8px;border:1px solid #395246;background:#14251d;color:inherit}button{cursor:pointer}button.active{background:#b5f2cc;color:#112b1b}label{display:inline-flex;gap:8px;align-items:center;margin:0 14px 12px 0}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}.card{padding:18px;border:1px solid #30463a;border-radius:12px;background:#12221b}.teams{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:18px 0}.team{display:flex;align-items:center;gap:8px;flex:1}.team:last-child{justify-content:flex-end;text-align:right}img{width:26px;height:26px;object-fit:contain}.score{font-size:22px;font-weight:700;white-space:nowrap}.warning{padding:14px;background:#443b19;border-radius:8px;color:#ffe39c}.scroll{overflow:auto}table{width:100%;border-collapse:collapse;white-space:nowrap}td,th{padding:12px;text-align:left;border-bottom:1px solid #30463a}.star{padding:4px 8px;border:0;font-size:20px;background:transparent}.star.chosen{color:#f8d675}footer{padding:30px;color:#aabcb2}a{color:#a2eec0}details{margin-top:12px}#error{color:#ffd4b4}@media(max-width:600px){header,main{padding:18px}.teams{gap:6px}.team{font-size:13px}.score{font-size:18px}}
+</style></head><body><header><div class="eyebrow">LE FOOT, CHAQUE JOUR</div><h1>Football Daily<span style="color:#82dba5">.</span></h1><p>Résultats, calendrier et classements dans un seul endroit.</p><p class="muted" id="updated">Chargement des données…</p></header><main><div id="warnings"></div><nav aria-label="Vues" id="tabs"></nav><label>Compétition <select id="league"><option value="all">Toutes</option></select></label><label id="dateLabel">Date <input id="date" type="date"></label><p class="muted">★ Sélectionne tes équipes sur les cartes ou les classements. Tes favoris restent dans ce navigateur.</p><div id="content"></div><p id="error" role="alert"></p></main><footer><a href="https://www.football-data.org/">Données football-data.org</a> · Horaires Europe/Paris · Actualisation quotidienne, sans suivi en direct.</footer>
+<script>
+'use strict';
+let data,view='Aujourd’hui',favorites=new Set();
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const name=t=>t.shortName||t.name||'Équipe';
+const date=m=>{const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Paris',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(m.utcDate));const v=k=>p.find(x=>x.type===k).value;return `${v('year')}-${v('month')}-${v('day')}`;};
+const time=m=>new Intl.DateTimeFormat('fr-FR',{timeZone:'Europe/Paris',hour:'2-digit',minute:'2-digit'}).format(new Date(m.utcDate));
+const statuses={FINISHED:'Terminé',TIMED:'Programmé',SCHEDULED:'Programmé',IN_PLAY:'En cours',PAUSED:'Mi-temps',POSTPONED:'Reporté',CANCELLED:'Annulé',SUSPENDED:'Suspendu',AWARDED:'Attribué'};
+function star(t){return `<button class="star ${favorites.has(t.id)?'chosen':''}" data-team="${Number(t.id)}" aria-label="Favori ${esc(name(t))}" aria-pressed="${favorites.has(t.id)}">★</button>`;}
+function crest(t){let u;try{u=new URL(t.crest);if(u.protocol!=='https:')return '';}catch{return '';}return `<img alt="" loading="lazy" referrerpolicy="no-referrer" src="${esc(u.href)}">`;}
+function card(m,l){const s=m.score?.fullTime||{},score=s.home!=null&&s.away!=null?`${s.home} – ${s.away}`:time(m);return `<article class="card"><small>${esc(l.name)} · ${esc(date(m))} · ${esc(statuses[m.status]||m.status)}</small><p class="muted">Récupération : ${esc(l.freshness.matches||'indisponible')}</p><div class="teams"><div class="team">${crest(m.homeTeam)}<span>${esc(name(m.homeTeam))}</span></div><div class="score">${esc(score)}</div><div class="team"><span>${esc(name(m.awayTeam))}</span>${crest(m.awayTeam)}</div></div><div>${star(m.homeTeam)} ${star(m.awayTeam)}</div><details><summary>Détails du match</summary><p>Coup d’envoi : ${esc(time(m))} · Journée ${esc(m.matchday??'—')}</p>${m.venue?`<p>${esc(m.venue)}</p>`:''}<p>${m.score?.halfTime?.home!=null?`Mi-temps : ${esc(m.score.halfTime.home)} – ${esc(m.score.halfTime.away)}`:'Statistiques détaillées non disponibles.'}</p></details></article>`;}
+function render(){
+ $('dateLabel').hidden=view!=='Résultats';
+ const leagues=Object.values(data.leagues).filter(l=>$('league').value==='all'||l.code===$('league').value);
+ let html='';
+ if(view==='Classements'||view==='Buteurs'){
+  for(const l of leagues){html+=`<h2>${esc(l.name)}</h2><p class="muted">Récupération : ${esc(l.freshness[view==='Classements'?'standings':'scorers']||'indisponible')}</p><div class="scroll"><table>`;
+   if(view==='Classements'){html+='<thead><tr><th>#</th><th>Équipe</th><th>J</th><th>Points</th><th>Diff.</th><th>Évolution J−1</th></tr></thead><tbody>';for(const t of l.table)html+=`<tr><td>${t.position}</td><td>${star(t.team)}${esc(name(t.team))}</td><td>${t.playedGames}</td><td>${t.points}</td><td>${t.goalDifference}</td><td>${t.movement==null?'—':t.movement>0?'↑ '+t.movement:t.movement<0?'↓ '+Math.abs(t.movement):'='}</td></tr>`;}
+   else{html+='<thead><tr><th>Joueur</th><th>Équipe</th><th>Buts</th><th>Passes</th></tr></thead><tbody>';for(const s of l.scorers)html+=`<tr><td>${esc(s.player?.name)}</td><td>${esc(s.team?.name)}</td><td>${esc(s.goals)}</td><td>${esc(s.assists??'—')}</td></tr>`;}
+   html+='</tbody></table></div>';if(!(view==='Classements'?l.table:l.scorers).length)html+='<p>Données indisponibles pour cette compétition.</p>';
+  }
+ }else{
+  const matches=leagues.flatMap(l=>l.matches.map(m=>({m,l}))).filter(({m})=>view==='Aujourd’hui'?date(m)===data.today:view==='Résultats'?date(m)===$('date').value:view==='Calendrier'?date(m)>=data.today:(favorites.has(m.homeTeam.id)||favorites.has(m.awayTeam.id))).sort((a,b)=>a.m.utcDate.localeCompare(b.m.utcDate));
+  html='<div class="grid">'+matches.map(({m,l})=>card(m,l)).join('')+'</div>';
+  if(!matches.length)html='<p class="card">'+(view==='Mes équipes'&&!favorites.size?'Choisis tes équipes avec les étoiles.':'Aucun match disponible pour cette sélection. Vérifie aussi les dates de récupération.')+'</p>';
+ }
+ $('content').innerHTML=html;
+ document.querySelectorAll('[data-team]').forEach(b=>b.onclick=()=>{const id=Number(b.dataset.team);favorites.has(id)?favorites.delete(id):favorites.add(id);try{localStorage.setItem('football-favorites',JSON.stringify([...favorites]));}catch{}render();});
+}
+fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Données indisponibles');return r.json();}).then(d=>{
+ data=d;try{favorites=new Set(JSON.parse(localStorage.getItem('football-favorites')||JSON.stringify(d.config.favorite_team_ids)));}catch{favorites=new Set(d.config.favorite_team_ids);}
+ $('updated').textContent='Dernière extraction : '+(d.meta.extracted_at?new Date(d.meta.extracted_at).toLocaleString('fr-FR',{timeZone:'Europe/Paris'}):'indisponible')+' · Horaires de Paris';
+ if(d.meta.errors?.length||!d.meta.extracted_at||Date.now()-new Date(d.meta.extracted_at).getTime()>36*3600000)$('warnings').innerHTML='<p class="warning">Données anciennes ou partielles : consulte les dates de récupération. Certaines données peuvent provenir d’une extraction précédente.</p>';
+ for(const l of Object.values(d.leagues)){const o=document.createElement('option');o.value=l.code;o.textContent=l.name;$('league').append(o);}
+ for(const label of ['Aujourd’hui','Résultats','Calendrier','Classements','Buteurs','Mes équipes']){const b=document.createElement('button');b.textContent=label;b.className=label===view?'active':'';b.onclick=()=>{view=label;document.querySelectorAll('#tabs button').forEach(x=>x.className=x===b?'active':'');render();};$('tabs').append(b);}
+ const yesterday=new Date(d.today+'T12:00:00Z');yesterday.setUTCDate(yesterday.getUTCDate()-1);$('date').value=yesterday.toISOString().slice(0,10);$('date').min=new Date(new Date(d.today+'T12:00:00Z')-7*86400000).toISOString().slice(0,10);$('date').max=d.today;
+ $('league').onchange=render;$('date').onchange=render;render();
+}).catch(()=>{$('error').textContent='Impossible de charger les données. Réessaie plus tard.';$('updated').textContent='Données indisponibles';});
+</script></body></html>

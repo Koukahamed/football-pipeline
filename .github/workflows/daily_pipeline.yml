@@ -1,66 +1,96 @@
 name: ⚽ Football Daily Digest
-
 on:
   schedule:
-    # Les cron GitHub Actions utilisent l'heure UTC.
-    # Deux déclenchements couvrent CET et CEST ; le pipeline ne poursuit
-    # son exécution qu'à 09:00 en Europe/Paris.
     - cron: '0 7 * * *'
     - cron: '0 8 * * *'
-  workflow_dispatch:   # Déclenchement manuel depuis GitHub UI
-
+  workflow_dispatch:
+    inputs:
+      preview_only:
+        description: Générer les aperçus sans envoyer de mail ni publier
+        type: boolean
+        default: true
 permissions:
   contents: read
-
+concurrency:
+  group: football-daily
+  cancel-in-progress: false
 jobs:
   daily_digest:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 20
+    outputs:
+      ran: ${{ steps.gate.outputs.run }}
+      generated: ${{ steps.build.outputs.ready }}
     steps:
-      - name: 🕘 Check scheduled execution time
-        id: paris_gate
-        shell: bash
+      - name: Check Paris time
+        id: gate
         run: |
-          PARIS_HOUR="$(TZ=Europe/Paris date +%H)"
-
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$PARIS_HOUR" = "09" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            echo "✅ Pipeline execution authorized."
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "⏭️ Scheduled run skipped: it is ${PARIS_HOUR}:00 in Paris."
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(TZ=Europe/Paris date +%H)" = "09" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
           fi
-
-      # ── Setup ──────────────────────────────────────────────────────────────
-      - name: 📥 Checkout repo
-        if: steps.paris_gate.outputs.should_run == 'true'
-        uses: actions/checkout@v4
-
-      - name: 🐍 Setup Python 3.11
-        if: steps.paris_gate.outputs.should_run == 'true'
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
         with:
           python-version: '3.11'
-
-      - name: 📦 Install dependencies
-        if: steps.paris_gate.outputs.should_run == 'true'
-        run: pip install requests
-
-      # ── Extraction ─────────────────────────────────────────────────────────
-      - name: ⚡ Fetch data — matchs du jour + résultats d'hier
-        if: steps.paris_gate.outputs.should_run == 'true'
+      - name: Dependencies
+        if: steps.gate.outputs.run == 'true'
+        run: pip install -r requirements.txt
+      - uses: actions/cache/restore@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          path: data
+          key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: football-data-
+      - name: Extract
+        if: steps.gate.outputs.run == 'true'
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python ingestion/fetch_data.py
-
-      # ── Email ──────────────────────────────────────────────────────────────
-      - name: 📧 Generate & send daily digest email
-        if: steps.paris_gate.outputs.should_run == 'true'
+      - name: Generate dashboard and mail preview
+        id: build
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          python report/generate_dashboard.py
+          python report/send_email.py --preview-only
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          name: football-preview
+          path: report/output
+          retention-days: 14
+      - uses: actions/cache/save@v4
+        if: steps.gate.outputs.run == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
+        with:
+          path: data
+          key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Send email
+        if: steps.gate.outputs.run == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
         env:
-          SMTP_HOST:  ${{ secrets.SMTP_HOST }}
-          SMTP_PORT:  ${{ secrets.SMTP_PORT }}
-          SMTP_USER:  ${{ secrets.SMTP_USER }}
-          SMTP_PASS:  ${{ secrets.SMTP_PASS }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO:   ${{ secrets.EMAIL_TO }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python report/send_email.py
+  publish:
+    needs: daily_digest
+    if: always() && needs.daily_digest.outputs.generated == 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: football-preview
+          path: public
+      - name: Remove private email preview
+        run: rm -f public/email_preview.html
+      - uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public
+          publish_branch: gh-pages
