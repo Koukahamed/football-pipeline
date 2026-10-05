@@ -1,5 +1,13 @@
 name: ⚽ Football Daily Digest
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'config.json'
+      - 'ingestion/**'
+      - 'report/**'
+      - 'requirements.txt'
+      - '.github/workflows/daily_pipeline.yml'
   schedule:
     - cron: '0 7 * * *'
     - cron: '0 8 * * *'
@@ -25,7 +33,7 @@ jobs:
       - name: Check Paris time
         id: gate
         run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$(TZ=Europe/Paris date +%H)" = "09" ]; then
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$(TZ=Europe/Paris date +%H)" = "09" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
@@ -67,7 +75,7 @@ jobs:
           path: data
           key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Send email
-        if: steps.gate.outputs.run == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
+        if: steps.gate.outputs.run == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only))
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}

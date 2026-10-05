@@ -8,7 +8,7 @@ Un mail court le matin et un dashboard public issu de la même extraction : rés
 
 `ingestion/fetch_data.py` → JSON dans `data/raw` → `report/send_email.py` et `report/generate_dashboard.py`.
 
-Le workflow **Football Daily Digest** utilise deux cron UTC (07 h et 08 h) et ne poursuit que pendant l’heure de 09 h en `Europe/Paris`. GitHub Actions peut retarder un déclenchement : l’horaire n’est pas une garantie à la minute. Un lancement manuel contourne ce contrôle.
+Le workflow **Football Daily Digest** utilise deux cron UTC (07 h et 08 h) et ne poursuit que pendant l’heure de 09 h en `Europe/Paris`. GitHub Actions peut retarder un déclenchement : l’horaire n’est pas une garantie à la minute. Un lancement manuel contourne ce contrôle. Une modification des sources sur `main` actualise aussi le dashboard, sans envoyer de mail supplémentaire.
 
 Les dates de match sont filtrées dans le fuseau de Paris, y compris autour de minuit et des changements d’heure. Les requêtes couvrent sept jours passés et sept jours à venir ; le dashboard ne prétend pas fournir des scores en direct. Les statistiques détaillées dépendent des données accessibles avec le compte API.
 
