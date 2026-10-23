@@ -21,6 +21,8 @@ const assert=require('node:assert/strict');
  assert.equal(await page.getByRole('img',{name:/Classement observé/}).count(),1);
  assert.equal(await page.locator('.chart polyline').count(),1);
  assert.equal(await page.locator('.chart circle').count(),3);
+ const xs=await page.locator('.chart circle').evaluateAll(nodes=>nodes.map(n=>Number(n.getAttribute('cx'))));
+ assert.ok(xs.at(-1)-xs[0]>500,'History must span the horizontal time axis');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  await page.screenshot({path:'/tmp/football-dynamics-mobile.png',fullPage:true});
  await page.setViewportSize({width:1440,height:1050});
