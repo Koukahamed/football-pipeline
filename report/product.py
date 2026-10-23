@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 from html import escape
+from dynamics import team_dynamics
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((ROOT / 'config.json').read_text())
@@ -32,6 +33,7 @@ def dataset():
         table = [dict(x, movement=positions[x['team']['id']] - x['position'] if x['team']['id'] in positions else None) for x in table]
         leagues[key] = dict(meta, matches=resources['matches'].get('matches', []), table=table,
                             scorers=resources['scorers'].get('scorers', []),
+                            dynamics=team_dynamics(resources['matches'], resources['standings'], ROOT / 'data/history', key, datetime.now(TZ)),
                             freshness={kind: value.get('_fetched_at') for kind, value in resources.items()})
     return {'config': CONFIG, 'today': str(today), 'generated_at': datetime.now(TZ).isoformat(), 'meta': read('meta.json'), 'leagues': leagues}
 
@@ -94,3 +96,4 @@ def email_content(data):
     url = escape(data['config']['dashboard_url'], quote=True)
     html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#eaf0f6;font:16px Arial;color:#17243a"><main style="max-width:620px;margin:24px auto;padding:24px;background:white;border-radius:16px">' + f'<h1>⚽ Football Daily</h1><p>{today} · Horaires de Paris</p>' + ''.join(parts) + f'<p><a style="display:inline-block;padding:14px;background:#185a43;color:white;border-radius:8px" href="{url}">Classements, buteurs et calendrier →</a></p><p style="font-size:12px;color:#64748b">Données football-data.org · Actualisation quotidienne, sans suivi en direct.</p></main></body></html>'
     return html, '\n'.join(plain) + '\n' + data['config']['dashboard_url']
+
