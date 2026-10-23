@@ -28,7 +28,12 @@ jobs:
           npm install --no-save --package-lock=false playwright@1.62.1
           npx playwright install --with-deps chromium
           node tests/dashboard.cjs
+          node tests/dynamics.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: dashboard-mobile
-          path: /tmp/football-mobile.png
+          path: |
+            /tmp/football-mobile.png
+            /tmp/football-dynamics-mobile.png
+            /tmp/football-dynamics-desktop.png
+
