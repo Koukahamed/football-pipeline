@@ -1,4 +1,4 @@
-"""Retrieve a bounded Paris-date window; preserve last good responses on failure."""
+"""Retrieve the current season; preserve successful responses and daily snapshots."""
 import json
 import os
 import time
@@ -66,6 +66,8 @@ def retrieve(client, endpoint, filename, now, errors, params=None):
                 or endpoint.endswith('/scorers') and not isinstance(data.get('scorers'), list)):
             raise ValueError('Missing expected collection')
         data['_fetched_at'] = now.isoformat()
+        if endpoint.endswith('/matches') and not params:
+            data['_scope'] = 'current_season'
         write(path, data)
         return data
     except (requests.RequestException, ValueError, RuntimeError) as exc:
@@ -85,10 +87,12 @@ def main():
     errors = []
     for league, meta in CONFIG['leagues'].items():
         base = f"competitions/{meta['code']}"
-        # Over-fetch UTC boundary dates, then filter exact local dates. dateTo is exclusive in v4.
-        matches = retrieve(client, base + '/matches', f'matches_{league}.json', now, errors,
-                           {'dateFrom': str(today - timedelta(days=8)), 'dateTo': str(today + timedelta(days=8))})
+        # Competition matches default to the entire current season (one call per league).
+        matches = retrieve(client, base + '/matches', f'matches_{league}.json', now, errors)
         if matches:
+            season_id = matches.get('matches', [{}])[0].get('season', {}).get('id') if matches.get('matches') else None
+            if season_id is not None and matches.get('_fetched_at') == now.isoformat():
+                write(HISTORY / f'matches_{league}_{season_id}.json', matches)
             items = matches.get('matches', [])
             for prefix, predicate in [
                 ('today', lambda d: d == today),
@@ -100,9 +104,6 @@ def main():
             write(HISTORY / f'standings_{league}_{today}.json', standings)
         retrieve(client, base + '/scorers', f'scorers_{league}.json', now, errors, {'limit': 10})
     write(RAW / 'meta.json', {'extracted_at': now.isoformat(), 'today': str(today), 'errors': errors, 'leagues': list(CONFIG['leagues'])})
-    for path in HISTORY.glob('standings_*.json'):
-        if path.name[-15:-5] < str(today - timedelta(days=60)):
-            path.unlink()
     print(f'Extraction complete: {len(errors)} unavailable resources (last good data retained).')
     if len(errors) == 3 * len(CONFIG['leagues']):
         raise SystemExit('All API resources failed; refusing publication/email')
@@ -110,3 +111,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
