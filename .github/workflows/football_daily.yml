@@ -39,6 +39,18 @@ jobs:
           path: data
           key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: football-data-
+      - name: Read durable data
+        uses: actions/checkout@v4
+        with:
+          ref: football-data
+          path: .durable
+          sparse-checkout: data
+      - name: Restore durable history and last good responses
+        run: |
+          mkdir -p data
+          if [ -d .durable/data ]; then
+            cp -a .durable/data/. data/
+          fi
       - name: Extract
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
@@ -59,6 +71,17 @@ jobs:
         with:
           path: data
           key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Prepare durable data
+        if: github.event_name != 'workflow_dispatch' || !inputs.preview_only
+        run: |
+          mkdir -p durable/data
+          cp -a data/. durable/data/
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'workflow_dispatch' || !inputs.preview_only
+        with:
+          name: football-durable-data
+          path: durable
+          retention-days: 7
       - name: Send email
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only)
         env:
@@ -69,6 +92,23 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python report/send_email.py
+  persist:
+    needs: daily_digest
+    if: always() && needs.daily_digest.outputs.generated == 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: football-durable-data
+          path: durable
+      - name: Version history and last good responses
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: durable
+          publish_branch: football-data
   publish:
     needs: daily_digest
     if: always() && needs.daily_digest.outputs.generated == 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
@@ -87,3 +127,4 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: public
           publish_branch: gh-pages
+
