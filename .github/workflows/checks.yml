@@ -8,6 +8,7 @@ permissions:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,6 +25,7 @@ jobs:
         with:
           node-version: '22'
       - name: Browser integration test
+        timeout-minutes: 5
         run: |
           npm install --no-save --package-lock=false playwright@1.62.1
           npx playwright install --with-deps chromium
