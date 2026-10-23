@@ -9,8 +9,7 @@ on:
       - 'requirements.txt'
       - '.github/workflows/football_daily.yml'
   schedule:
-    - cron: '0 7 * * *'
-    - cron: '0 8 * * *'
+    - cron: '17 7 * * *'
   workflow_dispatch:
     inputs:
       preview_only:
@@ -27,55 +26,41 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     outputs:
-      ran: ${{ steps.gate.outputs.run }}
       generated: ${{ steps.build.outputs.ready }}
     steps:
-      - name: Check Paris time
-        id: gate
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ] || [ "$GITHUB_EVENT_NAME" = "push" ] || [ "$(TZ=Europe/Paris date +%H)" = "09" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v4
-        if: steps.gate.outputs.run == 'true'
       - uses: actions/setup-python@v5
-        if: steps.gate.outputs.run == 'true'
         with:
           python-version: '3.11'
       - name: Dependencies
-        if: steps.gate.outputs.run == 'true'
         run: pip install -r requirements.txt
       - uses: actions/cache/restore@v4
-        if: steps.gate.outputs.run == 'true'
         with:
           path: data
           key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: football-data-
       - name: Extract
-        if: steps.gate.outputs.run == 'true'
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python ingestion/fetch_data.py
       - name: Generate dashboard and mail preview
         id: build
-        if: steps.gate.outputs.run == 'true'
         run: |
           python report/generate_dashboard.py
           python report/send_email.py --preview-only
           echo "ready=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
-        if: steps.gate.outputs.run == 'true'
         with:
           name: football-preview
           path: report/output
           retention-days: 14
       - uses: actions/cache/save@v4
-        if: steps.gate.outputs.run == 'true' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
+        if: github.event_name != 'workflow_dispatch' || !inputs.preview_only
         with:
           path: data
           key: football-data-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Send email
-        if: steps.gate.outputs.run == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only))
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only)
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
