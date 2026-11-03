@@ -5,6 +5,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: football-daily
   cancel-in-progress: false
@@ -35,6 +36,25 @@ jobs:
       - run: |
           mkdir -p data
           cp -a .durable/data/. data/
+      - name: Reuse verified historical backfill when available
+        if: hashFiles('data/training/coverage.json') == ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: predictions-v2-validation
+          run-id: 41673775450
+          github-token: ${{ github.token }}
+          path: .v2-bootstrap
+      - name: Restore historical training inputs only
+        run: |
+          if [ -d .v2-bootstrap/data/training ]; then
+            mkdir -p data/training
+            cp -a .v2-bootstrap/data/training/. data/training/
+          fi
+          if [ -f .v2-bootstrap/data/predictions/model_report.json ]; then
+            mkdir -p data/predictions
+            cp .v2-bootstrap/data/predictions/model_report.json data/predictions/
+          fi
       - name: Backfill history and refresh current results
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}

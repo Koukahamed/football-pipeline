@@ -127,7 +127,7 @@ def evaluate(record, match, now):
     actual = '1' if h > a else '2' if a > h else 'N'
     total = h + a
     over = {k: total > float(k) for k in record['over']}
-    record['evaluation'] = dict(status='settled', evaluated_at=now.isoformat(), actual=actual, total=total, correct=record['pick'] == actual, over=over, btts=h > 0 and a > 0, brier=sum((p - int(k == actual))**2 for k, p in record['outcome'].items()), baseline_correct=actual == '1', baseline_brier=sum((p - int(k == actual))**2 for k, p in record['baseline']['outcome'].items()))
+    record['evaluation'] = dict(status='settled', evaluated_at=now.isoformat(), actual=actual, total=total, correct=record['pick'] == actual, over=over, btts=h > 0 and a > 0, brier=sum((p - int(k == actual))**2 for k, p in record['outcome'].items()), baseline_correct=actual == max(record['baseline']['outcome'], key=record['baseline']['outcome'].get), baseline_brier=sum((p - int(k == actual))**2 for k, p in record['baseline']['outcome'].items()))
 
 
 def summary(records):

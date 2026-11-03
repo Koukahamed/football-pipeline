@@ -387,11 +387,11 @@ def backtest(matches, now):
                      'uncalibrated_goals': goal_metrics(tp[winner_g], tr),
                      'reliability': reliability(out, tr), 'by_competition': by_comp},
             'historical_matches': len(matches),
-            'limitations': ['Historical backtest uses archived final scores, not point-in-time API snapshots.',
-                           'Same-day results excluded from features; models refitted before each month.',
-                           'No injuries, official lineups or xG used; future rotations are not inferred.',
-                           'European strength links rely on collected competitions; unobserved leagues remain uncertain.',
-                           'Global temperature calibration; no claim of perfect calibration for every competition.']}
+            'limitations': ['Simulation sur les résultats archivés : les corrections tardives des scores ne sont pas datées historiquement.',
+                           'Résultats du jour exclus des variables ; paramètres réentraînés avant chaque mois de test.',
+                           'Blessures, compositions officielles et xG non intégrés ; aucune rotation future supposée.',
+                           'Comparaisons européennes fondées sur les compétitions collectées ; niveau plus incertain pour les championnats non couverts.',
+                           'Correction globale des probabilités : aucune garantie de calibration parfaite par compétition.']}
 
 
 def main():

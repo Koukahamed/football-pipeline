@@ -93,6 +93,12 @@ class V2Tests(unittest.TestCase):
             result2=update(root,league,NOW+timedelta(hours=2))
             self.assertEqual(frozen,result2['records'][0])
             self.assertEqual(len(result2['archived_records']),1)
+            m['status']='FINISHED'
+            m['score']['fullTime']={'home':0,'away':1}
+            settled=update(root,league,NOW+timedelta(days=2))
+            self.assertTrue(settled['records'][0]['evaluation']['baseline_correct'])
+            self.assertEqual(settled['by_model']['v2-elo-dc-catboost-1']['count'],1)
+            self.assertEqual(settled['by_model']['poisson-v1']['count'],1)
 
 if __name__=='__main__':
     unittest.main()
