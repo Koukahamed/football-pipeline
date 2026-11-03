@@ -59,11 +59,25 @@ function dynamicsView(leagues){
  ${history.length?`<details><summary>Consulter les ${history.length} relevé${history.length>1?'s':''}</summary><div class="scroll"><table class="history-table"><thead><tr><th>Date</th><th>Place</th><th>Points</th><th>Matchs joués</th></tr></thead><tbody>${history.map(p=>`<tr><td>${esc(p.date)}</td><td>${p.position}</td><td>${p.points??'—'}</td><td>${p.played??'—'}</td></tr>`).join('')}</tbody></table></div></details>`:''}</section>`;
  return html;
 }
+function predictionsView(leagues){
+ const p=data.predictions;if(!p)return '<p class="card">Prédictions disponibles après la prochaine extraction.</p>';
+ const keys=Object.entries(data.leagues).filter(([,l])=>leagues.includes(l)).map(([k])=>k);
+ const rows=p.records.filter(r=>keys.includes(r.league));
+ const settled=rows.filter(r=>r.evaluation?.status==='settled');
+ const n=settled.length,correct=settled.filter(r=>r.evaluation.correct).length;
+ const pct=x=>`${Math.round(x*100)} %`;
+ const metrics=n?`<div class="stats"><div class="card stat"><small>ISSUES JUSTES</small><strong>${correct} / ${n}</strong><small>${pct(correct/n)} · référence domicile : ${pct(settled.filter(r=>r.evaluation.baseline_correct).length/n)}</small></div><div class="card stat"><small>BRIER 1/N/2 · PLUS BAS = MIEUX</small><strong>${(settled.reduce((s,r)=>s+r.evaluation.brier,0)/n).toFixed(3)}</strong><small>Référence fixe : ${(settled.reduce((s,r)=>s+r.evaluation.baseline_brier,0)/n).toFixed(3)}</small></div><div class="card stat"><small>PLUS / MOINS DE 2,5 BUTS</small><strong>${settled.filter(r=>(r.over['2.5']>=.5)===r.evaluation.over['2.5']).length} / ${n}</strong><small>Choix du côté le plus probable</small></div></div><div class="scroll"><table><thead><tr><th>Seuil de buts</th><th>Choix justes</th><th>Brier</th></tr></thead><tbody>${['1.5','2.5','3.5'].map(k=>`<tr><td>${k.replace('.',',')}</td><td>${settled.filter(r=>(r.over[k]>=.5)===r.evaluation.over[k]).length} / ${n}</td><td>${(settled.reduce((s,r)=>s+(r.over[k]-Number(r.evaluation.over[k]))**2,0)/n).toFixed(3)}</td></tr>`).join('')}</tbody></table></div>`:'<p class="card">Le suivi commence maintenant : aucun résultat rétrospectif inventé. Le bilan apparaîtra après les premiers matchs pronostiqués.</p>';
+ const upcoming=rows.filter(r=>!r.evaluation&&Date.parse(r.kickoff)>Date.parse(data.generated_at)).sort((a,b)=>a.kickoff.localeCompare(b.kickoff));
+ const history=rows.filter(r=>!upcoming.includes(r)).sort((a,b)=>b.kickoff.localeCompare(a.kickoff));
+ function predictionCard(r){const e=r.evaluation;return `<article class="card"><small>${esc(data.leagues[r.league]?.name)} · ${esc(stamp(r.kickoff))}</small><h3>${esc(name(r.home))} – ${esc(name(r.away))}</h3><p>${['1','N','2'].map(k=>[k,r.outcome[k]]).map(([k,v])=>`${k} : <strong>${pct(v)}</strong>`).join(' · ')}</p><p>Choix : <strong>${esc(r.pick)}</strong> · ${esc(r.confidence)}</p><p>Total moyen : <strong>${r.expected_total}</strong> buts</p>${Object.entries(r.over).map(([k,v])=>`<p>Plus de ${k.replace('.',',')} buts : <strong>${pct(v)}</strong> · Moins : ${pct(1-v)}</p>`).join('')}<p>Les deux marquent : ${pct(r.btts)}</p>${e?e.status==='settled'?`<p class="warning">${e.correct?'✓ Issue juste':'✗ Issue manquée'} · résultat ${esc(e.actual)} · ${e.total} but(s)</p>`:`<p class="warning">Hors bilan : ${esc(e.reason)}</p>`:Date.parse(r.kickoff)<=Date.parse(data.generated_at)?'<p>En attente du résultat final.</p>':''}<details><summary>Facteurs et limites</summary>${r.notes.map(s=>`<p>${esc(s)}</p>`).join('')}<p>Émis le ${esc(stamp(r.issued_at))} · ${esc(r.model)} · prédiction figée.</p></details></article>`;}
+ return `<h2>Prédictions et bilan</h2><p class="muted dynamics-note">Modèle statistique expérimental, probabilités non encore calibrées. 1 : domicile · N : nul · 2 : extérieur. Plus de 2,5 buts signifie au moins 3 buts. Évaluation sur 90 minutes ; prolongations et tirs au but exclus. Actualisation quotidienne.</p>${metrics}<h2>Prochaines rencontres</h2><div class="grid">${upcoming.map(predictionCard).join('')||'<p>Aucune prochaine rencontre pronostiquée.</p>'}</div><h2>Historique</h2><div class="grid">${history.map(predictionCard).join('')||'<p>Aucun pronostic passé.</p>'}</div>`;
+}
 function render(){
  $('dateLabel').hidden=view!=='Résultats';
  const leagues=Object.values(data.leagues).filter(l=>$('league').value==='all'||l.code===$('league').value);
  let html='';
- if(view==='Dynamique'){html=dynamicsView(leagues);
+ if(view==='Prédictions'){html=predictionsView(leagues);
+ }else if(view==='Dynamique'){html=dynamicsView(leagues);
  }else if(view==='Classements'||view==='Buteurs'){
   for(const l of leagues){html+=`<h2>${esc(l.name)}</h2><p class="muted">Récupération : ${esc(stamp(l.freshness[view==='Classements'?'standings':'scorers']))}</p><div class="scroll"><table>`;
    if(view==='Classements'){html+='<thead><tr><th>#</th><th>Équipe</th><th>J</th><th>Points</th><th>Diff.</th><th>Évolution J−1</th></tr></thead><tbody>';for(const t of l.table)html+=`<tr><td>${t.position}</td><td>${star(t.team)}${profileButton(t.team,l)}</td><td>${t.playedGames}</td><td>${t.points}</td><td>${t.goalDifference}</td><td>${t.movement==null?'—':t.movement>0?'↑ '+t.movement:t.movement<0?'↓ '+Math.abs(t.movement):'='}</td></tr>`;}
@@ -85,7 +99,7 @@ fetch('data.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw Error('Données in
  $('updated').textContent='Dernière extraction : '+(d.meta.extracted_at?new Date(d.meta.extracted_at).toLocaleString('fr-FR',{timeZone:'Europe/Paris'}):'indisponible')+' · Horaires de Paris';
  if(d.meta.errors?.length||!d.meta.extracted_at||Date.now()-new Date(d.meta.extracted_at).getTime()>36*3600000)$('warnings').innerHTML='<p class="warning">Données anciennes ou partielles : consulte les dates de récupération. Certaines données peuvent provenir d’une extraction précédente.</p>';
  for(const l of Object.values(d.leagues)){const o=document.createElement('option');o.value=l.code;o.textContent=l.name;$('league').append(o);}
- for(const label of ['Aujourd’hui','Résultats','Calendrier','Classements','Dynamique','Buteurs','Mes équipes']){const b=document.createElement('button');b.textContent=label;b.className=label===view?'active':'';b.onclick=()=>setView(label);$('tabs').append(b);}
+ for(const label of ['Aujourd’hui','Résultats','Calendrier','Classements','Dynamique','Prédictions','Buteurs','Mes équipes']){const b=document.createElement('button');b.textContent=label;b.className=label===view?'active':'';b.onclick=()=>setView(label);$('tabs').append(b);}
  const yesterday=new Date(d.today+'T12:00:00Z');yesterday.setUTCDate(yesterday.getUTCDate()-1);$('date').value=yesterday.toISOString().slice(0,10);$('date').min=new Date(new Date(d.today+'T12:00:00Z')-7*86400000).toISOString().slice(0,10);$('date').max=d.today;
  $('league').onchange=render;$('date').onchange=render;render();
 }).catch(()=>{$('error').textContent='Impossible de charger les données. Réessaie plus tard.';$('updated').textContent='Données indisponibles';});
