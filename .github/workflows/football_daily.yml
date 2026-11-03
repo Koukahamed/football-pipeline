@@ -18,13 +18,14 @@ on:
         default: true
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: football-daily
   cancel-in-progress: false
 jobs:
   daily_digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     outputs:
       generated: ${{ steps.build.outputs.ready }}
     steps:
@@ -59,6 +60,38 @@ jobs:
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python ingestion/fetch_data.py
+      - name: Reuse verified historical backfill when available
+        if: hashFiles('data/training/coverage.json') == ''
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: predictions-v2-validation
+          run-id: 41673775450
+          github-token: ${{ github.token }}
+          path: .v2-bootstrap
+      - name: Restore historical training inputs only
+        run: |
+          if [ -d .v2-bootstrap/data/training ]; then
+            mkdir -p data/training
+            cp -a .v2-bootstrap/data/training/. data/training/
+          fi
+          if [ -f .v2-bootstrap/data/predictions/model_report.json ]; then
+            mkdir -p data/predictions
+            cp .v2-bootstrap/data/predictions/model_report.json data/predictions/
+          fi
+      - name: Backfill historical training seasons
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/history.py
+      - name: Check lineup access
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/team_news.py
+      - name: Compare, calibrate and generate V2 forecasts
+        env:
+          OPENBLAS_NUM_THREADS: '2'
+          OMP_NUM_THREADS: '2'
+        run: python report/model_v2.py
       - name: Generate dashboard and mail preview
         id: build
         run: |

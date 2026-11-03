@@ -127,7 +127,7 @@ def evaluate(record, match, now):
     actual = '1' if h > a else '2' if a > h else 'N'
     total = h + a
     over = {k: total > float(k) for k in record['over']}
-    record['evaluation'] = dict(status='settled', evaluated_at=now.isoformat(), actual=actual, total=total, correct=record['pick'] == actual, over=over, btts=h > 0 and a > 0, brier=sum((p - int(k == actual))**2 for k, p in record['outcome'].items()), baseline_correct=actual == '1', baseline_brier=sum((p - int(k == actual))**2 for k, p in record['baseline']['outcome'].items()))
+    record['evaluation'] = dict(status='settled', evaluated_at=now.isoformat(), actual=actual, total=total, correct=record['pick'] == actual, over=over, btts=h > 0 and a > 0, brier=sum((p - int(k == actual))**2 for k, p in record['outcome'].items()), baseline_correct=actual == max(record['baseline']['outcome'], key=record['baseline']['outcome'].get), baseline_brier=sum((p - int(k == actual))**2 for k, p in record['baseline']['outcome'].items()))
 
 
 def summary(records):
@@ -141,36 +141,74 @@ def summary(records):
 
 def update(root, leagues, now=None):
     now = now or datetime.now(UTC)
-    path = Path(root) / 'data/predictions/ledger.json'
+    root = Path(root)
+    path = root / 'data/predictions/ledger.json'
     ledger = json.loads(path.read_text()) if path.exists() else {'records': []}
     records = ledger['records']
-    index = {str(r['match_id']): r for r in records}
-    calendar = {str(m['id']): m for l in leagues.values() for m in l['matches']}
+    latest = {str(r['match_id']): r for r in records}
+    serving_path = root / 'data/predictions/serving.json'
+    serving = json.loads(serving_path.read_text()) if serving_path.exists() else {}
+    model_path = root / 'data/predictions/model_report.json'
+    model_report = json.loads(model_path.read_text()) if model_path.exists() else {}
+    fresh_serving = bool(serving.get('generated_at')) and timedelta(0) <= now - instant(serving['generated_at']) < timedelta(hours=36)
+    all_matches = {}
+    for archive in sorted((root / 'data/history').glob('matches_*.json')):
+        for m in json.loads(archive.read_text()).get('matches', []):
+            all_matches[str(m['id'])] = m
+    all_matches.update({str(m['id']): m for l in leagues.values() for m in l['matches']})
+    for record in records:
+        match = all_matches.get(str(record['match_id']))
+        if match:
+            evaluate(record, match, now)
     for key, league in leagues.items():
-        # Current responses take priority over archived versions of the same match.
-        history = {}
-        for archive in sorted((Path(root) / 'data/history').glob(f'matches_{key}_*.json')):
-            for m in json.loads(archive.read_text()).get('matches', []):
-                history[str(m['id'])] = m
-        history.update({str(m['id']): m for m in league['matches']})
-        for archived_id, archived_match in history.items():
-            if archived_id in index:
-                evaluate(index[archived_id], archived_match, now)
         for match in league['matches']:
             mid = str(match['id'])
-            if mid in index:
-                evaluate(index[mid], match, now)
-            elif league.get('freshness', {}).get('matches') and timedelta(0) <= now - instant(league['freshness']['matches']) < timedelta(hours=36) and match.get('status') in ('TIMED', 'SCHEDULED') and now < instant(match['utcDate']) <= now + timedelta(days=7):
-                record = forecast(match, list(history.values()), list(calendar.values()), now)
+            current = latest.get(mid)
+            candidate = serving.get('predictions', {}).get(mid) if fresh_serving else None
+            if match.get('status') not in ('TIMED','SCHEDULED') or not now < instant(match['utcDate']) <= now + timedelta(days=7):
+                continue
+            fresh = league.get('freshness', {}).get('matches')
+            if not fresh or not timedelta(0) <= now - instant(fresh) < timedelta(hours=36):
+                continue
+            if current and (current['model'] != VERSION or not candidate):
+                continue
+            if candidate:
+                # Legacy prediction preserved; a new version is issued only before kickoff.
+                if current:
+                    current['superseded_by'] = candidate['model']
+                record = dict(candidate, match_id=match['id'], kickoff=match['utcDate'],
+                              home=match['homeTeam'], away=match['awayTeam'], league=key,
+                              issued_at=now.isoformat(), pick=max(candidate['outcome'], key=candidate['outcome'].get))
+                features = candidate['features']
+                record['confidence'] = 'Historique limité' if min(features['home']['sample'], features['away']['sample']) < 15 else 'Historique multi-compétitions'
+                record['notes'] = [
+                    f"Forme récente : {features[v]['recent_points']} points sur {features[v]['recent_played']} matchs ({'domicile' if v == 'home' else 'extérieur'})."
+                    for v in ('home','away')]
+                record['notes'] += [f"Elo : {features['home']['elo']} / {features['away']['elo']}.",
+                    'Forces apprises sur les championnats et compétitions européennes collectés ; modèles comparés chronologiquement.',
+                    'Détails des modèles retenus et des tests disponibles dans le bilan historique.',
+                    'Jours de repos issus des matchs terminés connus ; calendrier limité aux compétitions collectées.',
+                    'Absences, compositions, xG et rotations non intégrés : disponibilité et apport prédictif à établir.']
+            elif not model_report:
+                # Compatibility only for isolated previews/tests before the V2 training step.
+                if current:
+                    continue
+                record = forecast(match, list(all_matches.values()), list(all_matches.values()), now)
                 record['league'] = key
-                records.append(record)
-                index[mid] = record
+            else:
+                continue
+            records.append(record)
+            latest[mid] = record
     path.parent.mkdir(parents=True, exist_ok=True)
-    temp = path.with_suffix('.tmp')
-    temp.write_text(json.dumps(ledger, ensure_ascii=False), encoding='utf-8')
-    temp.replace(path)
-    return {'records': sorted(records, key=lambda r: r['kickoff'], reverse=True), 'summary': summary(records), 'model': VERSION}
-
+    temporary = path.with_suffix('.tmp')
+    temporary.write_text(json.dumps(ledger, ensure_ascii=False, allow_nan=False), encoding='utf-8')
+    temporary.replace(path)
+    active = list(latest.values())
+    archived = [r for r in records if r is not latest[str(r['match_id'])]]
+    return {'records': sorted(active, key=lambda r: r['kickoff'], reverse=True),
+            'archived_records': archived, 'summary': summary(active),
+            'by_model': {version: summary([r for r in records if r['model'] == version]) for version in sorted({r['model'] for r in records})},
+            'model': model_report.get('version', VERSION), 'model_report': model_report}
 
 def email_section(predictions, today, tz):
     """Email-safe table cards; the text alternative keeps blank lines between fixtures."""
@@ -182,8 +220,8 @@ def email_section(predictions, today, tz):
     pct = lambda p: f'{p:.0%}'.replace('%', ' %')
     short = lambda team: team.get('shortName') or team.get('name') or 'Équipe'
     html = ['<h2 style="margin:32px 0 8px;font-size:23px;color:#17243a">Prédictions</h2>',
-            '<p style="margin:0 0 20px;color:#64748b;font-size:13px;line-height:1.6">Les tendances du jour · 1 : domicile, N : nul, 2 : extérieur.<br>Modèle expérimental, probabilités non encore calibrées.</p>']
-    lines = ['\nPrédictions · 1 / N / 2 et buts', 'Modèle statistique expérimental ; probabilités non encore calibrées.\n']
+            '<p style="margin:0 0 20px;color:#64748b;font-size:13px;line-height:1.6">Les tendances du jour · 1 : domicile, N : nul, 2 : extérieur.<br>Prévisions expérimentales · méthode et évaluation disponibles sur le site.</p>']
+    lines = ['\nPrédictions · 1 / N / 2 et buts', 'Prévisions expérimentales ; méthode et évaluation disponibles sur le site.\n']
     for r in current:
         home, away = short(r['home']), short(r['away'])
         hour = instant(r['kickoff']).astimezone(tz).strftime('%H:%M')
