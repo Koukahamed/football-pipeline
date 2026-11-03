@@ -1,0 +1,55 @@
+name: Audit historical API access
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/audit_history.yml']
+permissions:
+  contents: read
+concurrency:
+  group: football-daily
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Probe historical seasons without saving match data
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os, json, time, urllib.request, urllib.error
+          key = os.environ.get('FOOTBALL_API_KEY')
+          if not key:
+              raise SystemExit('Missing configured API key')
+          rows = []
+          for competition in ('PL', 'FL1', 'BL1', 'PD', 'CL'):
+              for season in (2023, 2024, 2025):
+                  request = urllib.request.Request(
+                      f'https://api.football-data.org/v4/competitions/{competition}/matches?season={season}',
+                      headers={'X-Auth-Token': key})
+                  row = {'competition': competition, 'requested_season': season}
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          body = json.load(response)
+                          row['http'] = response.status
+                      matches = body.get('matches', [])
+                      starts = sorted({m.get('season', {}).get('startDate') for m in matches if m.get('season', {}).get('startDate')})
+                      row.update(matches=len(matches), finished=sum(m.get('status') == 'FINISHED' for m in matches), returned_seasons=starts)
+                      row['verified'] = bool(matches) and bool(starts) and all(s.startswith(str(season)) for s in starts)
+                  except urllib.error.HTTPError as exc:
+                      row['http'] = exc.code
+                      row['verified'] = False
+                  except Exception as exc:
+                      row['error_type'] = type(exc).__name__
+                      row['verified'] = False
+                  rows.append(row)
+                  print(json.dumps(row), flush=True)
+                  time.sleep(6.3)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'w') as summary:
+              summary.write('# Historical access audit\n\n')
+              summary.write('| Competition | Season | HTTP | Matches | Finished | Returned seasons | Verified |\n|---|---|---|---|---|---|---|\n')
+              for r in rows:
+                  summary.write('| ' + ' | '.join(str(r.get(k, '—')) for k in ('competition','requested_season','http','matches','finished','returned_seasons','verified')) + ' |\n')
+          PY
