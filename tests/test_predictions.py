@@ -76,7 +76,7 @@ class PredictionsTests(unittest.TestCase):
             self.assertIn('&lt;Home&gt;', html)
             self.assertNotIn('<Home>', html)
             self.assertIn('1.5', str(p['records'][0]['over']))
-            self.assertIn('Bilan veille', html)
+            self.assertIn('Bilan de la veille', html)
 
 if __name__ == '__main__':
     unittest.main()

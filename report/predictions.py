@@ -173,21 +173,59 @@ def update(root, leagues, now=None):
 
 
 def email_section(predictions, today, tz):
+    """Email-safe table cards; the text alternative keeps blank lines between fixtures."""
     from html import escape
     records = predictions.get('records', [])
-    current = [r for r in records if str(instant(r['kickoff']).astimezone(tz).date()) == today]
+    current = sorted([r for r in records if str(instant(r['kickoff']).astimezone(tz).date()) == today], key=lambda r: r['kickoff'])
     yesterday = str(datetime.fromisoformat(today).date() - timedelta(days=1))
     previous = [r for r in records if str(instant(r['kickoff']).astimezone(tz).date()) == yesterday and r.get('evaluation', {}).get('status') == 'settled']
-    lines = ['Prédictions · 1 / N / 2 et buts', 'Modèle statistique expérimental ; probabilités non encore calibrées.']
-    for r in sorted(current, key=lambda r: r['kickoff']):
-        outcome = ' · '.join(f'{k} {v:.0%}' for k, v in [(k, r['outcome'][k]) for k in ('1', 'N', '2')])
-        thresholds = ' · '.join(f"+{k.replace('.', ',')} buts {v:.0%}" for k, v in r['over'].items())
-        lines += [f"{r['home'].get('name', 'Domicile')} – {r['away'].get('name', 'Extérieur')} : {outcome} ; choix {r['pick']}.", f"{thresholds} · total moyen {r['expected_total']} · les deux marquent {r['btts']:.0%}.", r['confidence'] + '. ' + ' '.join(r['notes'][:2])]
+    pct = lambda p: f'{p:.0%}'.replace('%', ' %')
+    short = lambda team: team.get('shortName') or team.get('name') or 'Équipe'
+    html = ['<h2 style="margin:32px 0 8px;font-size:23px;color:#17243a">Prédictions</h2>',
+            '<p style="margin:0 0 20px;color:#64748b;font-size:13px;line-height:1.6">Les tendances du jour · 1 : domicile, N : nul, 2 : extérieur.<br>Modèle expérimental, probabilités non encore calibrées.</p>']
+    lines = ['\nPrédictions · 1 / N / 2 et buts', 'Modèle statistique expérimental ; probabilités non encore calibrées.\n']
+    for r in current:
+        home, away = short(r['home']), short(r['away'])
+        hour = instant(r['kickoff']).astimezone(tz).strftime('%H:%M')
+        choice = {'1': 'Victoire ' + home, 'N': 'Match nul', '2': 'Victoire ' + away}[r['pick']]
+        # All structure uses nested presentation tables and inline styles for mail clients.
+        cells = []
+        for key, label in [('1', home), ('N', 'Nul'), ('2', away)]:
+            chosen = key == r['pick']
+            bg, fg = ('#185a43', '#ffffff') if chosen else ('#f1f5f9', '#17243a')
+            cells.append(f'<td width="33%" valign="top" style="padding:10px 4px;text-align:center;background:{bg};color:{fg};border:2px solid #ffffff;border-radius:8px"><div style="font-size:12px;line-height:1.4">{escape(key)} · {escape(label)}</div><div style="font-size:23px;font-weight:bold;line-height:1.5">{pct(r["outcome"][key])}</div></td>')
+        goal_rows = []
+        for key in ('1.5', '2.5', '3.5'):
+            goal_rows.append(f'<tr><td style="padding:8px 0;border-bottom:1px solid #e2e8f0;color:#475569">Au moins {int(float(key)) + 1} buts</td><td align="right" style="padding:8px 0;border-bottom:1px solid #e2e8f0;font-weight:bold;color:#17243a">{pct(r["over"][key])}</td></tr>')
+        total = f'{r["expected_total"]:.2f}'.replace('.', ',')
+        form = []
+        for venue, team in [('home', home), ('away', away)]:
+            f = r.get('features', {}).get(venue, {})
+            if f.get('recent_played'):
+                form.append(f'{team} : {f["recent_points"]} pts sur {f["recent_played"]} matchs')
+        html.append(f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;margin:0 0 22px;border:1px solid #dce5e0;border-radius:12px;background:#ffffff"><tr><td style="padding:20px">'
+                    f'<p style="margin:0 0 6px;font-size:12px;color:#64748b">COUP D’ENVOI · {hour} · PARIS</p>'
+                    f'<h3 style="margin:0 0 14px;font-size:18px;line-height:1.5;color:#17243a">{escape(home)} – {escape(away)}</h3>'
+                    f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;table-layout:fixed"><tr>{"".join(cells)}</tr></table>'
+                    f'<p style="margin:12px 0 18px;color:#185a43;font-size:14px;line-height:1.5"><strong>Tendance : {escape(choice)}</strong></p>'
+                    f'<p style="margin:0 0 4px;font-size:12px;font-weight:bold;letter-spacing:1px;color:#64748b">BUTS DANS LE MATCH</p>'
+                    f'<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;font-size:14px;line-height:1.5">{"".join(goal_rows)}'
+                    f'<tr><td style="padding:8px 0;color:#475569">Les deux équipes marquent</td><td align="right" style="padding:8px 0;font-weight:bold">{pct(r["btts"])}</td></tr></table>'
+                    f'<p style="margin:8px 0 0;color:#64748b;font-size:13px;line-height:1.6">Total moyen estimé : <strong>{total} buts</strong></p>'
+                    f'<p style="margin:16px 0 0;padding-top:12px;border-top:1px solid #e2e8f0;font-size:12px;line-height:1.8;color:#64748b">{escape(r["confidence"])}<br>{"<br>".join(escape(x) for x in form)}</p>'
+                    '</td></tr></table>')
+        outcome = ' | '.join(f'{k} : {pct(r["outcome"][k])}' for k in ('1', 'N', '2'))
+        lines.extend([f'{hour} · {home} – {away}', outcome, 'Tendance : ' + choice])
+        lines.extend(f'Au moins {int(float(k))+1} buts : {pct(r["over"][k])}' for k in ('1.5', '2.5', '3.5'))
+        lines.extend([f'Les deux équipes marquent : {pct(r["btts"])}', f'Total moyen estimé : {total} buts', r['confidence'], *form, ''])
     if not current:
-        lines.append('Aucun pronostic émis avant le coup d’envoi pour les matchs du jour.')
+        message = 'Aucun pronostic émis avant le coup d’envoi pour les matchs du jour.'
+        html.append(f'<p style="margin:16px 0;line-height:1.6">{message}</p>')
+        lines.append(message)
     s = summary(previous)
-    lines.append(f"Bilan veille : {s['correct']}/{s['count']} issues justes." if s['count'] else 'Bilan veille : aucun pronostic évaluable ; le suivi commence à la première émission.')
-    for k, item in s['over'].items():
-        if s['count']:
-            lines.append(f"Seuil {k} buts : {item['correct']}/{s['count']} justes.")
-    return '<h2>Prédictions</h2>' + ''.join('<p>' + escape(line) + '</p>' for line in lines), lines
+    review = [f'{s["correct"]}/{s["count"]} issues justes.' if s['count'] else 'Aucun pronostic évaluable ; le suivi commence à la première émission.']
+    if s['count']:
+        review.extend(f'Seuil {k.replace(".", ",")} buts : {item["correct"]}/{s["count"]} justes.' for k, item in s['over'].items())
+    html.append('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;width:100%;background:#f1f5f9;border-radius:10px"><tr><td style="padding:18px"><h3 style="margin:0 0 8px;color:#17243a;font-size:16px">Bilan de la veille</h3>' + ''.join(f'<p style="margin:6px 0;font-size:13px;line-height:1.6;color:#475569">{escape(x)}</p>' for x in review) + '</td></tr></table>')
+    lines.extend(['Bilan veille', *review])
+    return ''.join(html), lines
