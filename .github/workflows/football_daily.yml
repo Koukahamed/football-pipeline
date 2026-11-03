@@ -24,7 +24,7 @@ concurrency:
 jobs:
   daily_digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     outputs:
       generated: ${{ steps.build.outputs.ready }}
     steps:
@@ -59,6 +59,19 @@ jobs:
         env:
           FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
         run: python ingestion/fetch_data.py
+      - name: Backfill historical training seasons
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/history.py
+      - name: Check lineup access
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: python ingestion/team_news.py
+      - name: Compare, calibrate and generate V2 forecasts
+        env:
+          OPENBLAS_NUM_THREADS: '2'
+          OMP_NUM_THREADS: '2'
+        run: python report/model_v2.py
       - name: Generate dashboard and mail preview
         id: build
         run: |
