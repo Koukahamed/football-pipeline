@@ -5,6 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from html import escape
 from dynamics import team_dynamics
+from predictions import update, email_section
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((ROOT / 'config.json').read_text())
@@ -35,7 +36,8 @@ def dataset():
                             scorers=resources['scorers'].get('scorers', []),
                             dynamics=team_dynamics(resources['matches'], resources['standings'], ROOT / 'data/history', key, datetime.now(TZ)),
                             freshness={kind: value.get('_fetched_at') for kind, value in resources.items()})
-    return {'config': CONFIG, 'today': str(today), 'generated_at': datetime.now(TZ).isoformat(), 'meta': read('meta.json'), 'leagues': leagues}
+    predictions = update(ROOT, leagues)
+    return {'predictions': predictions, 'config': CONFIG, 'today': str(today), 'generated_at': datetime.now(TZ).isoformat(), 'meta': read('meta.json'), 'leagues': leagues}
 
 
 def match_date(match):
@@ -86,6 +88,9 @@ def email_content(data):
             message = 'Aucun match disponible pour cette journée.' if data['meta'].get('errors') else 'Aucun match dans les compétitions suivies.'
             parts.append(f'<p>{message}</p>')
             plain.append(message)
+    prediction_html, prediction_lines = email_section(data.get('predictions', {}), today, TZ)
+    parts.append(prediction_html)
+    plain.extend(prediction_lines)
     favorites = set(data['config']['favorite_team_ids'])
     next_matches = sorted([m for l in data['leagues'].values() for m in l['matches'] if m['homeTeam'].get('id') in favorites or m['awayTeam'].get('id') in favorites], key=lambda m: m['utcDate'])
     next_matches = [m for m in next_matches if str(match_date(m).date()) >= today][:5]

@@ -34,6 +34,10 @@ jobs:
           python-version: '3.11'
       - name: Dependencies
         run: pip install -r requirements.txt
+      - name: Validate prediction and product logic
+        run: |
+          python -m unittest discover -s tests -v
+          python -m compileall -q ingestion report
       - uses: actions/cache/restore@v4
         with:
           path: data
@@ -83,7 +87,7 @@ jobs:
           path: durable
           retention-days: 7
       - name: Send email
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only)
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[send-digest]'))
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
