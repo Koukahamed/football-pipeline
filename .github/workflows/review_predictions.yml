@@ -1,0 +1,45 @@
+name: Review prediction results
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/review_predictions.yml']
+permissions:
+  contents: read
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: football-data
+          sparse-checkout: data/predictions
+      - name: Compare frozen forecasts against latest results
+        env:
+          FOOTBALL_API_KEY: ${{ secrets.FOOTBALL_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os,json,urllib.request
+          from pathlib import Path
+          from datetime import datetime,timedelta
+          from zoneinfo import ZoneInfo
+          day=str(datetime.now(ZoneInfo('Europe/Paris')).date()-timedelta(days=1))
+          records=json.loads(Path('data/predictions/ledger.json').read_text())['records']
+          records=[r for r in records if r['model'].startswith('v2') and str(datetime.fromisoformat(r['kickoff'].replace('Z','+00:00')).astimezone(ZoneInfo('Europe/Paris')).date())==day]
+          req=urllib.request.Request('https://api.football-data.org/v4/competitions/CL/matches?dateFrom='+day+'&dateTo='+day,headers={'X-Auth-Token':os.environ['FOOTBALL_API_KEY']})
+          with urllib.request.urlopen(req,timeout=30) as response:
+              data=json.load(response)
+          matches={m['id']:m for m in data.get('matches',[])}
+          rows=[]
+          for r in records:
+              m=matches.get(r['match_id'],{})
+              s=m.get('score',{}).get('fullTime',{})
+              row={'home':r['home'].get('shortName') or r['home']['name'],'away':r['away'].get('shortName') or r['away']['name'],'pick':r['pick'],'probability':r['outcome'][r['pick']],'status':m.get('status'),'score':s}
+              if m.get('status')=='FINISHED' and all(isinstance(s.get(k),int) for k in ('home','away')) and m.get('score',{}).get('duration') in (None,'REGULAR') and m.get('utcDate')==r['kickoff']:
+                  h,a=s['home'],s['away']
+                  actual='1' if h>a else '2' if a>h else 'N'
+                  row.update(actual=actual,correct=actual==r['pick'],total=h+a,over_correct={k:(p>=.5)==(h+a>float(k)) for k,p in r['over'].items()},btts_correct=(r['btts']>=.5)==(h>0 and a>0))
+              rows.append(row)
+          print('REVIEW_JSON='+json.dumps({'date':day,'rows':rows},ensure_ascii=False))
+          PY
