@@ -97,6 +97,7 @@ jobs:
         run: |
           python report/generate_dashboard.py
           python report/send_email.py --preview-only
+          python report/send_email.py --favorites-only --preview-only
           echo "ready=true" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v4
         with:
@@ -129,6 +130,16 @@ jobs:
           EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
         run: python report/send_email.py
+      - name: Send favorites email
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !inputs.preview_only) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[send-digest]'))
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python report/send_email.py --favorites-only
   persist:
     needs: daily_digest
     if: always() && needs.daily_digest.outputs.generated == 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || !inputs.preview_only)
@@ -158,7 +169,7 @@ jobs:
           name: football-preview
           path: public
       - name: Remove private email preview
-        run: rm -f public/email_preview.html
+        run: rm -f public/email_preview.html public/email_favorites_preview.html
       - uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

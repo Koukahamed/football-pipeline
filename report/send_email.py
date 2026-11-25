@@ -4,17 +4,19 @@ import os
 import smtplib
 from email.message import EmailMessage
 from email.utils import parseaddr
-from product import dataset, email_content, OUT
+from product import dataset, email_content, favorites_email_content, OUT
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--preview-only', action='store_true')
+    parser.add_argument('--favorites-only', action='store_true')
     args = parser.parse_args()
     data = dataset()
-    html, plain = email_content(data)
+    html, plain = favorites_email_content(data) if args.favorites_only else email_content(data)
     OUT.mkdir(parents=True, exist_ok=True)
-    (OUT / 'email_preview.html').write_text(html, encoding='utf-8')
+    preview_name = 'email_favorites_preview.html' if args.favorites_only else 'email_preview.html'
+    (OUT / preview_name).write_text(html, encoding='utf-8')
     if args.preview_only:
         print('Email preview generated; nothing sent.')
         return
@@ -24,7 +26,8 @@ def main():
     recipients = [value.strip() for value in os.environ['EMAIL_TO'].split(',') if value.strip()]
     sender = os.environ.get('EMAIL_FROM') or os.environ['SMTP_USER']
     msg = EmailMessage()
-    msg['Subject'] = f"⚽ Football Daily — {data['today']} : résultats et matchs du jour"
+    msg['Subject'] = (f"⚽ Football Daily — Favoris ≥ 70 % — {data['today']}" if args.favorites_only
+                      else f"⚽ Football Daily — {data['today']} : résultats et matchs du jour")
     msg['From'] = sender
     msg['To'] = ', '.join(recipients)
     msg.set_content(plain)

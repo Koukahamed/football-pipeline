@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 from html import escape
 from dynamics import team_dynamics
-from predictions import update, email_section
+from predictions import update, email_section, instant
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG = json.loads((ROOT / 'config.json').read_text())
@@ -101,4 +101,54 @@ def email_content(data):
     url = escape(data['config']['dashboard_url'], quote=True)
     html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#eaf0f6;font:16px Arial;color:#17243a"><main style="max-width:620px;margin:24px auto;padding:24px;background:white;border-radius:16px">' + f'<h1>⚽ Football Daily</h1><p>{today} · Horaires de Paris</p>' + ''.join(parts) + f'<p><a style="display:inline-block;padding:14px;background:#185a43;color:white;border-radius:8px" href="{url}">Classements, buteurs et calendrier →</a></p><p style="font-size:12px;color:#64748b">Données football-data.org · Actualisation quotidienne, sans suivi en direct.</p></main></body></html>'
     return html, '\n'.join(plain) + '\n' + data['config']['dashboard_url']
+
+
+def favorites_email_content(data, now=None):
+    """Render today's unstarted, valid forecasts with a win probability >= 70%."""
+    now = now or datetime.now(TZ)
+    matches = {}
+    for key, league in data['leagues'].items():
+        if key not in ('epl', 'ligue1', 'bundesliga', 'laliga', 'seriea', 'ucl'):
+            continue
+        fetched = league.get('freshness', {}).get('matches')
+        if not fetched or not timedelta(0) <= now - instant(fetched) < timedelta(hours=36):
+            continue
+        for match in league['matches']:
+            matches[(key, str(match['id']))] = match
+    selected = []
+    for record in data.get('predictions', {}).get('records', []):
+        match = matches.get((record['league'], str(record['match_id'])))
+        if not match or match.get('status') not in ('TIMED', 'SCHEDULED'):
+            continue
+        kickoff = instant(record['kickoff'])
+        if match['utcDate'] != record['kickoff'] or record.get('evaluation'):
+            continue
+        if not instant(record['issued_at']) <= now < kickoff or str(kickoff.astimezone(TZ).date()) != data['today']:
+            continue
+        if record['pick'] in ('1', '2') and record['outcome'][record['pick']] >= .70:
+            selected.append(record)
+    selected.sort(key=lambda record: record['kickoff'])
+    title = 'Football Daily — Favoris ≥ 70 %'
+    intro = f"{data['today']} · Matchs du jour · Horaires de Paris"
+    plain = [title, intro, 'Probabilités estimées par le modèle.', '']
+    cards = []
+    for record in selected:
+        home, away = team_name(record['home']), team_name(record['away'])
+        winner = home if record['pick'] == '1' else away
+        probability = f"{record['outcome'][record['pick']] * 100:.1f}".replace('.', ',') + ' %'
+        hour = instant(record['kickoff']).astimezone(TZ).strftime('%H:%M')
+        league = data['leagues'][record['league']]['name']
+        plain.extend([f'{hour} · {league}', f'{home} – {away}', f'Victoire {winner} · {probability}', ''])
+        cards.append('<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;border:1px solid #dce5e0;border-radius:12px"><tr><td style="padding:20px">'
+                     f'<p style="margin:0 0 10px;color:#64748b;font-size:13px">{hour} · {escape(league)}</p>'
+                     f'<h2 style="margin:0 0 16px;font-size:18px;line-height:1.5">{escape(home)} – {escape(away)}</h2>'
+                     f'<p style="margin:0;color:#185a43;line-height:1.6"><strong>Victoire {escape(winner)} · {probability}</strong></p>'
+                     '</td></tr></table>')
+    if not selected:
+        message = 'Aucun favori éligible à au moins 70 % dans les prévisions disponibles pour les matchs du jour.'
+        cards.append(f'<p style="line-height:1.6">{message}</p>')
+        plain.append(message)
+    url = data['config']['dashboard_url']
+    html = '<!doctype html><html lang="fr"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body style="margin:0;background:#eaf0f6;font:16px Arial;color:#17243a"><main style="max-width:620px;margin:24px auto;padding:24px;background:white;border-radius:16px">' + f'<h1 style="font-size:24px">{escape(title)}</h1><p>{escape(intro)}</p><p style="margin:0 0 24px;color:#64748b;font-size:13px">Probabilités estimées par le modèle.</p>' + ''.join(cards) + f'<p><a href="{escape(url, quote=True)}">Consulter le site</a></p></main></body></html>'
+    return html, '\n'.join(plain) + '\n' + url
 
